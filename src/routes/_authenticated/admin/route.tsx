@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
       .single();
 
     if (!(profile as { is_admin?: boolean } | null)?.is_admin) {
-      throw redirect({ to: "/" });
+      throw redirect({ to: "/dashboard" });
     }
   },
   component: () => <Outlet />,

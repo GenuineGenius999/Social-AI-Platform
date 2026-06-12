@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AppShell } from "@/components/AppShell";
+import { PublicShell } from "@/components/PublicShell";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, Download, Star } from "lucide-react";
 import { downloadUrl } from "@/lib/download-client";
-import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/post/$postId")({
   ssr: false,
@@ -33,13 +34,17 @@ function PostDetail() {
   const { postId } = Route.useParams();
   const qc = useQueryClient();
   const [me, setMe] = useState<string | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+    supabase.auth.getUser().then(({ data }) => {
+      setMe(data.user?.id ?? null);
+      setAuthed(!!data.user);
+    });
   }, []);
 
   const post = useQuery({
@@ -135,36 +140,25 @@ function PostDetail() {
     ? (reviews.data.reduce((s, r) => s + r.rating, 0) / reviews.data.length).toFixed(1)
     : null;
 
-  if (post.isLoading) {
-    return <div className="p-8 mono-label">Loading post...</div>;
-  }
+  const body = (() => {
+    if (post.isLoading) return <div className="p-8 mono-label">Loading post...</div>;
+    if (!post.data) {
+      return (
+        <div className="p-8">
+          <Link to="/feed" className="mono-label hover:text-primary">
+            ← Back to grid
+          </Link>
+          <p className="mt-4">Post not found.</p>
+        </div>
+      );
+    }
 
-  if (!post.data) {
+    const p = post.data;
     return (
-      <div className="p-8">
-        <Link to="/" className="mono-label hover:text-primary">
-          ← Back to grid
-        </Link>
-        <p className="mt-4">Post not found.</p>
-      </div>
-    );
-  }
-
-  const p = post.data;
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-line px-6 py-4">
-        <Link to="/" className="flex items-center gap-2">
-          <img src={logo} alt="" className="size-8" width={32} height={32} />
-          <span className="font-display text-lg uppercase">Kinetik_</span>
-        </Link>
-        <Link to="/" className="inline-flex items-center gap-2 mono-label hover:text-primary">
-          <ArrowLeft className="size-4" /> Grid
-        </Link>
-      </header>
-
       <div className="p-4 lg:p-8 max-w-5xl mx-auto">
+        <Link to="/feed" className="inline-flex items-center gap-2 mono-label hover:text-primary mb-6">
+          <ArrowLeft className="size-4" /> Back to grid
+        </Link>
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="paper-card overflow-hidden grain relative">
             <img src={p.image_url} alt={p.prompt ?? "Post image"} className="w-full aspect-square object-cover" />
@@ -251,6 +245,10 @@ function PostDetail() {
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  })();
+
+  if (authed === null) return <div className="min-h-screen grid place-items-center mono-label">Loading…</div>;
+  if (authed) return <AppShell>{body}</AppShell>;
+  return <PublicShell>{body}</PublicShell>;
 }
