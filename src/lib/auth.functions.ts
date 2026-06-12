@@ -13,11 +13,15 @@ export const signUpWithEmail = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+    const isAdmin =
+      data.email.toLowerCase() === "admin@genai.com" ||
+      data.username.toLowerCase() === "genaisocial";
+
+    const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
       email_confirm: true,
-      user_metadata: { username: data.username },
+      user_metadata: { username: data.username, is_admin: isAdmin },
     });
 
     if (createError) {
@@ -26,6 +30,10 @@ export const signUpWithEmail = createServerFn({ method: "POST" })
         throw new Error("An account with this email already exists. Try signing in.");
       }
       throw createError;
+    }
+
+    if (isAdmin && created.user) {
+      await supabaseAdmin.from("profiles").update({ is_admin: true } as never).eq("id", created.user.id);
     }
 
     const { data: sessionData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
