@@ -5,11 +5,12 @@ import logo from "@/assets/logo.png";
 import type { ReactNode } from "react";
 
 const NAV = [
-  { to: "/", label: "Grid", code: "00" },
-  { to: "/studio", label: "Studio", code: "01" },
-  { to: "/chat", label: "AI Chat", code: "02" },
-  { to: "/messages", label: "Channels", code: "03" },
-  { to: "/settings", label: "Settings", code: "04" },
+  { to: "/dashboard", label: "Dashboard", code: "00" },
+  { to: "/feed", label: "Grid", code: "01" },
+  { to: "/studio", label: "Studio", code: "02" },
+  { to: "/chat", label: "AI Chat", code: "03" },
+  { to: "/messages", label: "Channels", code: "04" },
+  { to: "/settings", label: "Settings", code: "05" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -31,39 +32,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     await qc.cancelQueries();
     qc.clear();
     await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    navigate({ to: "/feed", replace: true });
   }
 
   const navItems = profile.data?.is_admin
     ? [...NAV, { to: "/admin", label: "Admin", code: "ADM" } as const]
     : NAV;
 
+  function isActive(path: string) {
+    if (path === "/dashboard") return location.pathname === "/dashboard";
+    return location.pathname.startsWith(path);
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="grid lg:grid-cols-[260px_1fr] min-h-screen">
         <aside className="hidden border-r-2 border-foreground bg-paper-2 p-6 lg:flex lg:flex-col lg:justify-between">
           <div>
-            <Link to="/" className="flex items-center gap-3">
+            <Link to="/dashboard" className="flex items-center gap-3">
               <img src={logo} alt="" className="size-9" width={36} height={36} />
               <span className="font-display text-xl uppercase tracking-tighter">Kinetik_</span>
             </Link>
             <nav className="mt-10 flex flex-col gap-1">
-              {navItems.map((item) => {
-                const active =
-                  item.to === "/"
-                    ? location.pathname === "/"
-                    : location.pathname.startsWith(item.to);
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`group flex items-center gap-3 border-l-2 px-3 py-3 transition-colors ${active ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"}`}
-                  >
-                    <span className="mono-label">{item.code}</span>
-                    <span className={`font-display text-lg uppercase ${active ? "text-primary" : ""}`}>{item.label}</span>
-                  </Link>
-                );
-              })}
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`group flex items-center gap-3 border-l-2 px-3 py-3 transition-colors ${isActive(item.to) ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"}`}
+                >
+                  <span className="mono-label">{item.code}</span>
+                  <span className={`font-display text-lg uppercase ${isActive(item.to) ? "text-primary" : ""}`}>{item.label}</span>
+                </Link>
+              ))}
             </nav>
           </div>
           <div>
@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <header className="flex items-center justify-between border-b-2 border-foreground bg-paper-2 px-4 py-3 lg:hidden">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <img src={logo} alt="" className="size-7" width={28} height={28} />
             <span className="font-display text-lg uppercase">Kinetik_</span>
           </Link>
@@ -84,17 +84,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </header>
 
-        <main className="overflow-x-hidden">
+        <main className="overflow-x-hidden min-w-0">
           <nav className="flex gap-1 overflow-x-auto border-b border-line bg-paper-2 px-4 py-2 lg:hidden">
-            {navItems.map((item) => {
-              const active =
-                item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
-              return (
-                <Link key={item.to} to={item.to} className={`mono-label whitespace-nowrap px-3 py-2 ${active ? "text-primary" : ""}`}>
-                  {item.label}
-                </Link>
-              );
-            })}
+            {navItems.map((item) => (
+              <Link key={item.to} to={item.to} className={`mono-label whitespace-nowrap px-3 py-2 ${isActive(item.to) ? "text-primary" : ""}`}>
+                {item.label}
+              </Link>
+            ))}
           </nav>
           {children}
         </main>

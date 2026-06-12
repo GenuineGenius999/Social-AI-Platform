@@ -1,19 +1,40 @@
-# Supabase setup (required once)
+# Database migration guide
 
-Your errors (`global_messages` table missing, `Bucket not found`) mean migrations were never applied to your Supabase project.
+Apply these migrations **once** to fix errors like `global_messages table not found` or `Bucket not found`.
 
-## Option A — CLI (recommended)
+## Step 1 — Link your Supabase project
 
 ```bash
 npx supabase login
 npx supabase link --project-ref qlerermcjnzetglzxpdu
+```
+
+## Step 2 — Push migrations
+
+```bash
 npm run db:push
 ```
 
-## Option B — SQL Editor
+This runs all files in `supabase/migrations/` in order.
 
-1. Open [Supabase Dashboard](https://supabase.com/dashboard) → your project → **SQL Editor**
-2. Run each file in `supabase/migrations/` **in filename order** (oldest first)
-3. Confirm buckets exist: **Storage** → `generated-images`, `avatars`
+## Step 3 — Verify in Supabase Dashboard
 
-After setup, redeploy to Vercel and hard-refresh the app.
+- **Table Editor**: `profiles`, `posts`, `global_messages`, `generations`, etc.
+- **Storage**: buckets `generated-images` and `avatars`
+
+## Alternative — SQL Editor
+
+If CLI fails, open Supabase Dashboard → **SQL Editor** and run each migration file in `supabase/migrations/` from oldest to newest filename.
+
+## Vercel deploy settings
+
+In Vercel → Project → Settings → Build & Development:
+
+| Setting | Value |
+|---------|--------|
+| Framework Preset | **TanStack Start** |
+| Build Command | `npm run build` |
+| Output Directory | **leave empty** (do NOT use `dist`) |
+| Install Command | `npm install` |
+
+Wrong output directory (`dist`) breaks routing and pages.
