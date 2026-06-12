@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { AppShell } from "@/components/AppShell";
 import { sendChatMessage } from "@/lib/ai.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { friendlyDbError } from "@/lib/db-errors";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({ component: Chat });
@@ -44,7 +45,8 @@ function Chat() {
       setMessages((m) => [...m, { role: "assistant", content: r.reply }]);
       loadConvs();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
+      const msg = e instanceof Error ? e.message : "Failed";
+      toast.error(friendlyDbError(msg));
     } finally { setSending(false); }
   }
 

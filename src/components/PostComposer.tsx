@@ -46,7 +46,14 @@ export function PostComposer({ onPosted }: { onPosted?: () => void }) {
       setPrompt("");
       onPosted?.();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload failed");
+      const msg = e instanceof Error ? e.message : "Upload failed";
+      if (/bucket not found/i.test(msg)) {
+        toast.error("Storage bucket missing. Run: npm run db:push");
+      } else if (/could not find the table/i.test(msg)) {
+        toast.error("Database not set up. Run: npm run db:push");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }

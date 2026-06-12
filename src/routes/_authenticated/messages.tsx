@@ -5,6 +5,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { useBlockedUsers, useHiddenMessages, useReactions } from "@/hooks/use-chat-social";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/chat.types";
+import { friendlyDbError } from "@/lib/db-errors";
 import { toast } from "sonner";
 import { Hash, MessageCircle, Plus, Users } from "lucide-react";
 
@@ -247,7 +248,15 @@ function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
   const profileMap = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u])), [users]);
 
   useEffect(() => {
-    supabase.from("global_messages").select("*").order("created_at", { ascending: true }).limit(300).then(({ data }) => setMsgs((data ?? []) as BaseMsg[]));
+    supabase
+      .from("global_messages")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(300)
+      .then(({ data, error }) => {
+        if (error) toast.error(friendlyDbError(error.message));
+        else setMsgs((data ?? []) as BaseMsg[]);
+      });
     const ch = supabase.channel("global-messages").on("postgres_changes", { event: "*", schema: "public", table: "global_messages" }, (payload) => {
       if (payload.eventType === "INSERT") setMsgs((cur) => [...cur, payload.new as BaseMsg]);
       if (payload.eventType === "UPDATE") setMsgs((cur) => cur.map((m) => (m.id === (payload.new as BaseMsg).id ? (payload.new as BaseMsg) : m)));
@@ -262,7 +271,7 @@ function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
     if (!input.trim()) return;
     const c = input.trim(); setInput("");
     const { error } = await supabase.from("global_messages").insert({ user_id: me, content: c });
-    if (error) toast.error(error.message);
+    if (error) toast.error(friendlyDbError(error.message));
   }
 
   async function deleteMsg(id: string) {

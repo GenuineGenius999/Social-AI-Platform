@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatWithOpenAI, downloadImageAsBuffer, generateImageWithOpenAI } from "@/lib/openai.server";
+import { chatWithOpenAI, generateImageWithOpenAI } from "@/lib/openai.server";
 import { z } from "zod";
 
 const ImgInput = z.object({ prompt: z.string().min(3).max(2000) });
@@ -9,19 +9,24 @@ export const generateImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ImgInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { url } = await generateImageWithOpenAI({
+    const { buf, mime } = await generateImageWithOpenAI({
       userId: context.userId,
       prompt: data.prompt,
       quality: "hd",
       size: "1024x1024",
     });
-    const { buf, mime } = await downloadImageAsBuffer(url);
+
     const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
     const path = `${context.userId}/${crypto.randomUUID()}.${ext}`;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const up = await supabaseAdmin.storage.from("generated-images").upload(path, buf, { contentType: mime });
-    if (up.error) throw new Error(up.error.message);
+    if (up.error) {
+      if (/bucket not found/i.test(up.error.message)) {
+        throw new Error("Storage not configured. Run: npm run db:push (creates generated-images bucket).");
+      }
+      throw new Error(up.error.message);
+    }
 
     const signed = await supabaseAdmin.storage.from("generated-images").createSignedUrl(path, 60 * 60 * 24 * 365);
     if (signed.error || !signed.data) throw new Error("Could not sign URL");
@@ -58,7 +63,12 @@ export const sendChatMessage = createServerFn({ method: "POST" })
         .insert({ user_id: userId, title: data.message.slice(0, 60) })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if (/could not find the table/i.test(error.message)) {
+          throw new Error("Database not set up. Run: npm run db:push");
+        }
+        throw error;
+      }
       convId = c.id;
     }
 
