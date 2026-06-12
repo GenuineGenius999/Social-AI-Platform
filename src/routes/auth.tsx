@@ -32,7 +32,7 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/studio" });
+      if (data.user) navigate({ to: "/" });
     });
   }, [navigate]);
 
@@ -51,11 +51,11 @@ function AuthPage() {
           toast.info("Sample pack download started (samples.rar)");
         }
 
-        setTimeout(() => navigate({ to: "/studio" }), 800);
+        setTimeout(() => navigate({ to: "/" }), 800);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/studio" });
+        navigate({ to: "/" });
       }
     } catch (err) {
       toast.error(authErrorMessage(err));

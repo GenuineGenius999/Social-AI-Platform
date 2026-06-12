@@ -1,24 +1,26 @@
-import process from "node:process";
+import { resolveOpenAIKey } from "@/lib/api-keys.server";
 
-function getOpenAIKey() {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("Missing OPENAI_API_KEY. Add it to your .env file.");
-  return key;
-}
+export type ImageGenOptions = {
+  userId: string;
+  prompt: string;
+  quality?: "standard" | "hd";
+  size?: "1024x1024" | "1792x1024" | "1024x1792";
+};
 
-export async function generateImageWithOpenAI(prompt: string): Promise<{ url: string; revisedPrompt?: string }> {
+export async function generateImageWithOpenAI(opts: ImageGenOptions): Promise<{ url: string; revisedPrompt?: string }> {
+  const key = await resolveOpenAIKey(opts.userId);
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getOpenAIKey()}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: "dall-e-3",
-      prompt,
+      prompt: opts.prompt,
       n: 1,
-      size: "1024x1024",
-      quality: "standard",
+      size: opts.size ?? "1024x1024",
+      quality: opts.quality ?? "hd",
     }),
   });
 
@@ -35,16 +37,18 @@ export async function generateImageWithOpenAI(prompt: string): Promise<{ url: st
 }
 
 export async function chatWithOpenAI(
+  userId: string,
   messages: { role: "system" | "user" | "assistant"; content: string }[],
 ): Promise<string> {
+  const key = await resolveOpenAIKey(userId);
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getOpenAIKey()}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages,
       temperature: 0.7,
       max_tokens: 2048,

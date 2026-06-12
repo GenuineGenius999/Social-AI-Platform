@@ -9,7 +9,12 @@ export const generateImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ImgInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { url } = await generateImageWithOpenAI(data.prompt);
+    const { url } = await generateImageWithOpenAI({
+      userId: context.userId,
+      prompt: data.prompt,
+      quality: "hd",
+      size: "1024x1024",
+    });
     const { buf, mime } = await downloadImageAsBuffer(url);
     const ext = mime.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
     const path = `${context.userId}/${crypto.randomUUID()}.${ext}`;
@@ -23,7 +28,12 @@ export const generateImage = createServerFn({ method: "POST" })
 
     const { data: gen, error } = await context.supabase
       .from("generations")
-      .insert({ user_id: context.userId, prompt: data.prompt, image_url: signed.data.signedUrl })
+      .insert({
+        user_id: context.userId,
+        prompt: data.prompt,
+        image_url: signed.data.signedUrl,
+        storage_path: path,
+      } as never)
       .select()
       .single();
     if (error) throw error;
@@ -73,7 +83,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       { role: "user" as const, content: data.message },
     ];
 
-    const reply = await chatWithOpenAI(messages);
+    const reply = await chatWithOpenAI(userId, messages);
     await supabase.from("ai_messages").insert({ conversation_id: convId, role: "assistant", content: reply });
     await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
 
