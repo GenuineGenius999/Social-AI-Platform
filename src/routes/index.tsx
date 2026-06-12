@@ -1,9 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { FeedGrid } from "@/components/FeedGrid";
-import { PostComposer } from "@/components/PostComposer";
+import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/")({
@@ -17,23 +16,27 @@ export const Route = createFileRoute("/")({
 });
 
 function HomeFeed() {
-  const qc = useQueryClient();
-  const [user, setUser] = useState<{ username?: string; isAdmin?: boolean } | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
-        setUser(null);
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username,is_admin")
-        .eq("id", data.user.id)
-        .single();
-      setUser({ username: profile?.username, isAdmin: (profile as { is_admin?: boolean })?.is_admin });
-    });
+    supabase.auth.getUser().then(({ data }) => setAuthed(!!data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setAuthed(!!session));
+    return () => sub.subscription.unsubscribe();
   }, []);
+
+  const feed = (
+    <div className="p-4 lg:p-8 animate-enter">
+      <FeedGrid />
+    </div>
+  );
+
+  if (authed === null) {
+    return <div className="min-h-screen grid place-items-center mono-label">Loading grid…</div>;
+  }
+
+  if (authed) {
+    return <AppShell>{feed}</AppShell>;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -43,40 +46,17 @@ function HomeFeed() {
           <span className="font-display text-2xl uppercase tracking-tighter">Kinetik_</span>
         </div>
         <div className="flex items-center gap-4 mono-label">
-          {user ? (
-            <>
-              <span className="hidden sm:inline text-muted-foreground">@{user.username}</span>
-              <Link to="/studio" className="hover:text-primary transition-colors">
-                Studio
-              </Link>
-              <Link to="/settings" className="hover:text-primary transition-colors">
-                Settings
-              </Link>
-              {user.isAdmin && (
-                <Link to="/admin" className="text-primary hover:underline">
-                  Admin
-                </Link>
-              )}
-            </>
-          ) : (
-            <Link to="/auth" className="ink-button rounded-sm px-4 py-2 text-xs normal-case tracking-normal">
-              Sign in
-            </Link>
-          )}
+          <Link to="/auth" className="hover:text-primary transition-colors">
+            Sign in
+          </Link>
+          <Link to="/auth" className="ink-button rounded-sm px-4 py-2 text-xs normal-case tracking-normal">
+            Join collective
+          </Link>
         </div>
       </nav>
-
-      <main className="mx-auto max-w-6xl px-6 py-10 lg:px-10">
-        {user && (
-          <div className="mb-8">
-            <PostComposer onPosted={() => qc.invalidateQueries({ queryKey: ["feed"] })} />
-          </div>
-        )}
-        <FeedGrid />
-      </main>
-
+      <main className="mx-auto max-w-6xl">{feed}</main>
       <footer className="border-t border-line px-6 py-8 mono-label lg:px-10">
-        © Kinetik Collective · OpenAI DALL·E 3 · Supabase
+        © Kinetik Collective · GPT Image · Supabase
       </footer>
     </div>
   );

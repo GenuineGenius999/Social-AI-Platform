@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
+import { PostComposer } from "@/components/PostComposer";
 import { generateImage } from "@/lib/ai.functions";
 import { downloadAllGenerations, getGenerationDownload } from "@/lib/download.functions";
 import { downloadBase64File } from "@/lib/download-client";
@@ -34,7 +35,7 @@ function Studio() {
     mutationFn: (p: string) => gen({ data: { prompt: p } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["generations"] });
-      toast.success("Rendered with DALL·E 3 HD.");
+      toast.success("Rendered with GPT Image.");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -56,6 +57,7 @@ function Studio() {
     else {
       toast.success("Posted to the grid.");
       setCaption("");
+      qc.invalidateQueries({ queryKey: ["feed"] });
     }
   }
 
@@ -81,15 +83,19 @@ function Studio() {
 
   return (
     <AppShell>
-      <div className="p-4 lg:p-8">
-        <div className="mono-label">/STUDIO</div>
-        <h1 className="font-display text-5xl uppercase mt-1">Generation</h1>
+      <div className="p-4 lg:p-8 space-y-8">
+        <div>
+          <div className="mono-label">/STUDIO</div>
+          <h1 className="font-display text-5xl uppercase mt-1">Generation</h1>
+        </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[320px_1fr]">
+        <PostComposer onPosted={() => qc.invalidateQueries({ queryKey: ["feed"] })} />
+
+        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <div className="paper-card p-6 space-y-5">
             <div>
               <label className="mono-label block mb-2">MODEL</label>
-              <div className="border border-line bg-background px-3 py-2 text-sm font-mono">dall-e-3 · HD · 1024×1024</div>
+              <div className="border border-line bg-background px-3 py-2 text-sm font-mono">gpt-image-1 · high · 1024×1024</div>
             </div>
             <div>
               <label className="mono-label block mb-2">PROMPT</label>
