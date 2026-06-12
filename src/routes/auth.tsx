@@ -1,10 +1,20 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { signUpWithEmail } from "@/lib/auth.functions";
 import { downloadSamplesPack, isWindows } from "@/lib/samples-download";
 import { toast } from "sonner";
 import logo from "@/assets/logo.png";
+
+function authErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : "Auth failed";
+  if (/email rate limit exceeded/i.test(msg)) {
+    return "Too many signup emails sent. Wait an hour, use Google sign-in, or try again shortly.";
+  }
+  return msg;
+}
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -18,6 +28,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const signUp = useServerFn(signUpWithEmail);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -30,14 +41,8 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/studio`,
-            data: { username },
-          },
-        });
+        const session = await signUp({ data: { email, password, username } });
+        const { error } = await supabase.auth.setSession(session);
         if (error) throw error;
         toast.success("Account created. Welcome to the workshop.");
 
@@ -53,7 +58,7 @@ function AuthPage() {
         navigate({ to: "/studio" });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Auth failed");
+      toast.error(authErrorMessage(err));
     } finally {
       setLoading(false);
     }
