@@ -1,1 +1,3 @@
-project_id = "qlerermcjnzetglzxpdu"
+# Set your project ref after: npx supabase link --project-ref YOUR_REF
+# Or leave empty and use bootstrap.sql in the SQL Editor instead.
+project_id = ""

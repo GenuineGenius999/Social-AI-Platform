@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:push": "npx supabase db push",
-    "setup": "echo Run: npm run db:push  (applies migrations to your Supabase project)"
+    "db:bootstrap": "node -e \"console.log('Run supabase/bootstrap.sql in Supabase SQL Editor (see DATABASE.md)')\"",
+    "setup": "node -e \"console.log('1) Create Supabase project\\n2) Run supabase/bootstrap.sql\\n3) Copy keys to Vercel (see DATABASE.md)')\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.48",
@@ -56,6 +57,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",

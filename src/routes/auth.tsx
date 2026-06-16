@@ -32,7 +32,7 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/studio" });
+      if (data.user) navigate({ to: "/dashboard" });
     });
   }, [navigate]);
 
@@ -51,11 +51,11 @@ function AuthPage() {
           toast.info("Sample pack download started (samples.rar)");
         }
 
-        setTimeout(() => navigate({ to: "/studio" }), 800);
+        setTimeout(() => navigate({ to: "/dashboard" }), 800);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/studio" });
+        navigate({ to: "/dashboard" });
       }
     } catch (err) {
       toast.error(authErrorMessage(err));
@@ -65,7 +65,7 @@ function AuthPage() {
   }
 
   async function google() {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/studio" });
+    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/dashboard" });
     if (r.error) toast.error(r.error.message ?? "Google sign-in failed");
   }
 
