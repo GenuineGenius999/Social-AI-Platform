@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:push": "npx supabase db push",
-    "setup": "echo Run: npm run db:push  (applies migrations to your Supabase project)"
+    "db:bootstrap": "node -e \"console.log('Run supabase/bootstrap.sql in Supabase SQL Editor (see DATABASE.md)')\"",
+    "setup": "node -e \"console.log('1) Create Supabase project\\n2) Run supabase/bootstrap.sql\\n3) Copy keys to Vercel (see DATABASE.md)')\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.48",
