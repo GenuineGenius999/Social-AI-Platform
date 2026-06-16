@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { getAdminUsers, updateUserStatus } from "@/lib/admin.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
@@ -19,8 +21,22 @@ function AdminUsers() {
   const users = useQuery({
     queryKey: ["admin-users"],
     queryFn: () => usersFn(),
-    refetchInterval: 30_000,
   });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("admin-users-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-users"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-users"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
 
   const update = useMutation({
     mutationFn: (payload: { userId: string; isBanned?: boolean; isAdmin?: boolean; status?: "active" | "suspended" }) =>

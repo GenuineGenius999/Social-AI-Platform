@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { getAdminStats } from "@/lib/admin.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Users, Image, FileImage, Activity, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -10,11 +12,33 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 });
 
 function AdminDashboard() {
+  const qc = useQueryClient();
   const statsFn = useServerFn(getAdminStats);
   const stats = useQuery({
     queryKey: ["admin-stats"],
     queryFn: () => statsFn(),
   });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("admin-stats-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-stats"] });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-stats"] });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "generations" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-stats"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-stats"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
 
   const cards = [
     { label: "Users", value: stats.data?.users ?? "—", icon: Users },

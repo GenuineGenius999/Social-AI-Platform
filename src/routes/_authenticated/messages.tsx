@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { useBlockedUsers, useHiddenMessages, useReactions } from "@/hooks/use-chat-social";
+import { OnlineDot, useIsOnline } from "@/hooks/use-online-status";
+import { markThreadRead, useUnreadCounts } from "@/hooks/use-unread-counts";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/chat.types";
 import { friendlyDbError } from "@/lib/db-errors";
@@ -21,6 +24,7 @@ function Messages() {
   const [activeDm, setActiveDm] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const { counts, refresh: refreshUnread } = useUnreadCounts(me);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
@@ -41,10 +45,10 @@ function Messages() {
       });
   }, [me, showCreateGroup]);
 
-  const tabs: { id: Tab; label: string; icon: typeof Hash }[] = [
-    { id: "global", label: "Global", icon: Hash },
-    { id: "groups", label: "Groups", icon: Users },
-    { id: "dm", label: "Private", icon: MessageCircle },
+  const tabs: { id: Tab; label: string; icon: typeof Hash; badge?: number }[] = [
+    { id: "global", label: "Global", icon: Hash, badge: counts.global },
+    { id: "groups", label: "Groups", icon: Users, badge: Object.values(counts.groups).reduce((a, b) => a + b, 0) },
+    { id: "dm", label: "Private", icon: MessageCircle, badge: Object.values(counts.dm).reduce((a, b) => a + b, 0) },
   ];
 
   return (
@@ -53,7 +57,7 @@ function Messages() {
         <aside className="border-b lg:border-b-0 lg:border-r-2 border-foreground bg-paper-2 p-4">
           <div className="mono-label mb-3">/CHANNELS</div>
           <div className="flex flex-col gap-1 mb-6">
-            {tabs.map(({ id, label, icon: Icon }) => (
+            {tabs.map(({ id, label, icon: Icon, badge }) => (
               <button
                 key={id}
                 type="button"
@@ -63,7 +67,12 @@ function Messages() {
                 }`}
               >
                 <Icon className="size-4" />
-                {label}
+                <span className="flex-1 text-left">{label}</span>
+                {(badge ?? 0) > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-mono grid place-items-center">
+                    {badge! > 99 ? "99+" : badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -80,14 +89,22 @@ function Messages() {
                     activeDm === u.id ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"
                   }`}
                 >
-                  {u.avatar_url ? (
-                    <img src={u.avatar_url} alt="" className="size-6 rounded-full object-cover" />
-                  ) : (
-                    <span className="size-6 rounded-full bg-card border border-line grid place-items-center font-mono text-[10px]">
-                      {u.username[0]}
+                  <span className="relative">
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt="" className="size-6 rounded-full object-cover" />
+                    ) : (
+                      <span className="size-6 rounded-full bg-card border border-line grid place-items-center font-mono text-[10px]">
+                        {u.username[0]}
+                      </span>
+                    )}
+                    <OnlineDot userId={u.id} className="absolute -bottom-0.5 -right-0.5 size-2!" />
+                  </span>
+                  <span className="flex-1 truncate">@{u.username}</span>
+                  {(counts.dm[u.id] ?? 0) > 0 && (
+                    <span className="min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-mono grid place-items-center">
+                      {counts.dm[u.id]}
                     </span>
                   )}
-                  @{u.username}
                 </button>
               ))}
             </div>
@@ -104,12 +121,19 @@ function Messages() {
                     key={g.id}
                     type="button"
                     onClick={() => setActiveGroup(g.id)}
-                    className={`block w-full text-left px-2 py-2 text-xs border-l-2 ${
+                    className={`flex w-full items-center gap-2 text-left px-2 py-2 text-xs border-l-2 ${
                       activeGroup === g.id ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"
                     }`}
                   >
-                    <span className="font-medium">{g.name}</span>
-                    {g.description && <span className="block text-muted-foreground truncate">{g.description}</span>}
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium block truncate">{g.name}</span>
+                      {g.description && <span className="block text-muted-foreground truncate">{g.description}</span>}
+                    </span>
+                    {(counts.groups[g.id] ?? 0) > 0 && (
+                      <span className="min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-mono grid place-items-center shrink-0">
+                        {counts.groups[g.id]}
+                      </span>
+                    )}
                   </button>
                 ))}
                 {groups.length === 0 && <div className="mono-label">No groups yet.</div>}
@@ -129,13 +153,13 @@ function Messages() {
         </aside>
 
         <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-screen">
-          {tab === "global" && me && <GlobalRoom me={me} users={users} />}
-          {tab === "dm" && me && activeDm && <DmRoom me={me} other={activeDm} users={users} />}
+          {tab === "global" && me && <GlobalRoom me={me} users={users} onRead={() => { markThreadRead(me, "global", "global"); refreshUnread(); }} />}
+          {tab === "dm" && me && activeDm && <DmRoom me={me} other={activeDm} users={users} onRead={() => { markThreadRead(me, "direct", activeDm); refreshUnread(); }} />}
           {tab === "dm" && !activeDm && (
             <EmptyState title="Select a maker" subtitle="Start a private 1:1 conversation" />
           )}
           {tab === "groups" && me && activeGroup && (
-            <GroupRoom me={me} groupId={activeGroup} groupName={groups.find((g) => g.id === activeGroup)?.name ?? "Group"} users={users} />
+            <GroupRoom me={me} groupId={activeGroup} groupName={groups.find((g) => g.id === activeGroup)?.name ?? "Group"} users={users} onRead={() => { markThreadRead(me, "group", activeGroup); refreshUnread(); }} />
           )}
           {tab === "groups" && !activeGroup && (
             <EmptyState title="Select or create a group" subtitle="Collaborate with multiple makers in realtime" />
@@ -194,9 +218,14 @@ function CreateGroupModal({
         .single();
       if (error) throw error;
 
-      const members = [{ group_id: group.id, user_id: me, role: "admin" as const }, ...[...selected].map((uid) => ({ group_id: group.id, user_id: uid, role: "member" as const }))];
-      const { error: mErr } = await supabase.from("chat_group_members").insert(members);
-      if (mErr) throw mErr;
+      const { error: selfErr } = await supabase.from("chat_group_members").insert({ group_id: group.id, user_id: me, role: "admin" });
+      if (selfErr) throw selfErr;
+
+      if (selected.size > 0) {
+        const others = [...selected].map((uid) => ({ group_id: group.id, user_id: uid, role: "member" as const }));
+        const { error: mErr } = await supabase.from("chat_group_members").insert(others);
+        if (mErr) throw mErr;
+      }
       toast.success("Group created");
       onCreated(group.id);
     } catch (e) {
@@ -235,9 +264,9 @@ function CreateGroupModal({
   );
 }
 
-type BaseMsg = { id: string; user_id: string; content: string; created_at: string; deleted_at?: string | null };
+type BaseMsg = { id: string; user_id: string; content: string; image_url?: string | null; created_at: string; deleted_at?: string | null };
 
-function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
+function GlobalRoom({ me, users, onRead }: { me: string; users: Profile[]; onRead: () => void }) {
   const [msgs, setMsgs] = useState<BaseMsg[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -266,11 +295,11 @@ function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
   }, []);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [msgs]);
+  useEffect(() => { onRead(); }, [onRead, msgs.length]);
 
-  async function send() {
-    if (!input.trim()) return;
-    const c = input.trim(); setInput("");
-    const { error } = await supabase.from("global_messages").insert({ user_id: me, content: c });
+  async function send({ content, imageUrl }: { content: string; imageUrl?: string | null }) {
+    if (!content && !imageUrl) return;
+    const { error } = await supabase.from("global_messages").insert({ user_id: me, content: content || " ", image_url: imageUrl ?? null });
     if (error) toast.error(friendlyDbError(error.message));
   }
 
@@ -290,6 +319,7 @@ function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
           key={m.id}
           id={m.id}
           content={m.content}
+          imageUrl={m.image_url}
           channel="global"
           isOwn={m.user_id === me}
           author={profileMap[m.user_id]}
@@ -308,18 +338,19 @@ function GlobalRoom({ me, users }: { me: string; users: Profile[] }) {
       ))}
       {visible.length === 0 && <div className="mono-label">No messages yet. Say hi to the collective.</div>}
     </div>
-    <ChatInput value={input} onChange={setInput} onSend={send} placeholder="Message the room..." />
+    <ChatInput value={input} onChange={setInput} onSend={send} placeholder="Message the room..." me={me} />
   </>
   );
 }
 
-function DmRoom({ me, other, users }: { me: string; other: string; users: Profile[] }) {
-  const [msgs, setMsgs] = useState<(BaseMsg & { sender_id: string; recipient_id: string })[]>([]);
+function DmRoom({ me, other, users, onRead }: { me: string; other: string; users: Profile[]; onRead: () => void }) {
+  const [msgs, setMsgs] = useState<(BaseMsg & { sender_id: string; recipient_id: string; image_url?: string | null })[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { blocked, blockUser } = useBlockedUsers(me);
   const { hidden, hideMessage, hideAllFromUser } = useHiddenMessages(me, "direct");
   const otherProfile = users.find((u) => u.id === other);
+  const otherOnline = useIsOnline(other);
   const visibleIds = useMemo(() => msgs.filter((m) => !hidden.has(m.id) && !m.deleted_at).map((m) => m.id), [msgs, hidden]);
   const { reactions, toggleReaction } = useReactions("direct", visibleIds);
 
@@ -339,15 +370,20 @@ function DmRoom({ me, other, users }: { me: string; other: string; users: Profil
   }, [me, other]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [msgs]);
+  useEffect(() => { onRead(); }, [onRead, msgs.length]);
 
   if (blocked.has(other)) {
     return <EmptyState title="User blocked" subtitle="Unblock from settings to resume chatting" />;
   }
 
-  async function send() {
-    if (!input.trim()) return;
-    const c = input.trim(); setInput("");
-    const { error } = await supabase.from("direct_messages").insert({ sender_id: me, recipient_id: other, content: c });
+  async function send({ content, imageUrl }: { content: string; imageUrl?: string | null }) {
+    if (!content && !imageUrl) return;
+    const { error } = await supabase.from("direct_messages").insert({
+      sender_id: me,
+      recipient_id: other,
+      content: content || " ",
+      image_url: imageUrl ?? null,
+    });
     if (error) toast.error(error.message);
   }
 
@@ -359,7 +395,7 @@ function DmRoom({ me, other, users }: { me: string; other: string; users: Profil
 
   return (
   <>
-    <RoomHeader code="PRIVATE_DM" title={`@${otherProfile?.username ?? "maker"}`} />
+    <RoomHeader code="PRIVATE_DM" title={`@${otherProfile?.username ?? "maker"}`} online={otherOnline} />
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 lg:p-8 space-y-4">
       {visible.map((m) => {
         const isOwn = m.sender_id === me;
@@ -369,6 +405,7 @@ function DmRoom({ me, other, users }: { me: string; other: string; users: Profil
             key={m.id}
             id={m.id}
             content={m.content}
+            imageUrl={m.image_url}
             channel="direct"
             isOwn={isOwn}
             author={author}
@@ -387,12 +424,12 @@ function DmRoom({ me, other, users }: { me: string; other: string; users: Profil
       })}
       {visible.length === 0 && <div className="mono-label">Start a private thread.</div>}
     </div>
-    <ChatInput value={input} onChange={setInput} onSend={send} placeholder="Private message..." />
+    <ChatInput value={input} onChange={setInput} onSend={send} placeholder="Private message..." me={me} />
   </>
   );
 }
 
-function GroupRoom({ me, groupId, groupName, users }: { me: string; groupId: string; groupName: string; users: Profile[] }) {
+function GroupRoom({ me, groupId, groupName, users, onRead }: { me: string; groupId: string; groupName: string; users: Profile[]; onRead: () => void }) {
   const [msgs, setMsgs] = useState<BaseMsg[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -412,11 +449,16 @@ function GroupRoom({ me, groupId, groupName, users }: { me: string; groupId: str
   }, [groupId]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [msgs]);
+  useEffect(() => { onRead(); }, [onRead, msgs.length]);
 
-  async function send() {
-    if (!input.trim()) return;
-    const c = input.trim(); setInput("");
-    const { error } = await supabase.from("group_messages").insert({ group_id: groupId, user_id: me, content: c });
+  async function send({ content, imageUrl }: { content: string; imageUrl?: string | null }) {
+    if (!content && !imageUrl) return;
+    const { error } = await supabase.from("group_messages").insert({
+      group_id: groupId,
+      user_id: me,
+      content: content || " ",
+      image_url: imageUrl ?? null,
+    });
     if (error) toast.error(error.message);
   }
 
@@ -435,6 +477,7 @@ function GroupRoom({ me, groupId, groupName, users }: { me: string; groupId: str
           key={m.id}
           id={m.id}
           content={m.content}
+          imageUrl={m.image_url}
           channel="group"
           isOwn={m.user_id === me}
           author={profileMap[m.user_id]}
@@ -453,34 +496,26 @@ function GroupRoom({ me, groupId, groupName, users }: { me: string; groupId: str
       ))}
       {visible.length === 0 && <div className="mono-label">No messages in this group yet.</div>}
     </div>
-    <ChatInput value={input} onChange={setInput} onSend={send} placeholder={`Message ${groupName}...`} />
+    <ChatInput value={input} onChange={setInput} onSend={send} placeholder={`Message ${groupName}...`} me={me} />
   </>
   );
 }
 
-function RoomHeader({ code, title, live }: { code: string; title: string; live?: boolean }) {
+function RoomHeader({ code, title, live, online }: { code: string; title: string; live?: boolean; online?: boolean }) {
   return (
     <div className="p-4 border-b border-line flex items-center justify-between">
       <div>
         <div className="mono-label">/{code}</div>
-        <h1 className="font-display text-3xl uppercase">{title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-display text-3xl uppercase">{title}</h1>
+          {online !== undefined && (
+            <span className={`mono-label text-[10px] ${online ? "text-green-600" : "text-muted-foreground"}`}>
+              {online ? "● Online" : "○ Offline"}
+            </span>
+          )}
+        </div>
       </div>
       {live && <div className="size-2 bg-green-600 rounded-full live-dot" />}
-    </div>
-  );
-}
-
-function ChatInput({ value, onChange, onSend, placeholder }: { value: string; onChange: (v: string) => void; onSend: () => void; placeholder: string }) {
-  return (
-    <div className="border-t border-line p-4 flex gap-2">
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onSend()}
-        placeholder={placeholder}
-        className="flex-1 border border-line bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none rounded-sm"
-      />
-      <button type="button" onClick={onSend} className="rust-button px-6">Send</button>
     </div>
   );
 }

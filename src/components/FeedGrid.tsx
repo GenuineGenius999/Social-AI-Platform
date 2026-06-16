@@ -18,6 +18,8 @@ export type FeedPost = {
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
+export const POST_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏", "🎉"] as const;
+
 export function useFeedQuery() {
   return useQuery({
     queryKey: ["feed"],
@@ -67,6 +69,12 @@ export function FeedGrid({ showHeader = true }: { showHeader?: boolean }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "post_reviews" }, () =>
         qc.invalidateQueries({ queryKey: ["feed"] }),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, () =>
+        qc.invalidateQueries({ queryKey: ["feed"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_comments" }, () =>
+        qc.invalidateQueries({ queryKey: ["feed"] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -74,26 +82,36 @@ export function FeedGrid({ showHeader = true }: { showHeader?: boolean }) {
   }, [qc]);
 
   return (
-    <div>
+    <div className={showHeader ? "p-4 lg:p-8" : ""}>
       {showHeader && (
         <>
-          <div className="mono-label">/PUBLIC_GRID</div>
+          <div className="mono-label">/FEED</div>
           <h1 className="font-display text-5xl uppercase mt-1">Collective Output</h1>
           <p className="mt-2 text-muted-foreground max-w-xl">
-            Discover renders from the community. Like, comment, and leave star reviews.
+            Discover renders from the community. React, comment, and leave star reviews.
           </p>
         </>
       )}
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={`${showHeader ? "mt-8" : ""} max-w-2xl mx-auto flex flex-col gap-6`}>
         {(posts.data ?? []).map((p) => (
           <PostCard key={p.id} post={p} />
         ))}
         {posts.data?.length === 0 && (
-          <div className="mono-label col-span-full">No posts yet. Be the first — generate in Studio or upload an image.</div>
+          <div className="mono-label text-center py-12">No posts yet. Be the first — generate in Studio or upload an image.</div>
         )}
       </div>
     </div>
   );
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
 function PostCard({
@@ -101,46 +119,48 @@ function PostCard({
 }: {
   post: FeedPost & { author?: Profile; avgRating: number | null; reviewCount: number };
 }) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+  const [reactions, setReactions] = useState<{ emoji: string; user_id: string }[]>([]);
   const [commentCount, setCommentCount] = useState(0);
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<{ id: string; content: string; user_id: string; created_at: string; username?: string }[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [me, setMe] = useState<string | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
 
   useEffect(() => {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       setLoggedIn(!!u.user);
-      const [{ count: lc }, { count: cc }, mine] = await Promise.all([
-        supabase.from("post_likes").select("*", { count: "exact", head: true }).eq("post_id", post.id),
+      setMe(u.user?.id ?? null);
+      const [{ data: rx }, { count: cc }] = await Promise.all([
+        supabase.from("post_reactions").select("emoji,user_id").eq("post_id", post.id),
         supabase.from("post_comments").select("*", { count: "exact", head: true }).eq("post_id", post.id),
-        u.user
-          ? supabase.from("post_likes").select("*").eq("post_id", post.id).eq("user_id", u.user.id).maybeSingle()
-          : Promise.resolve({ data: null }),
       ]);
-      setLikeCount(lc ?? 0);
+      setReactions((rx ?? []) as { emoji: string; user_id: string }[]);
       setCommentCount(cc ?? 0);
-      setLiked(!!mine.data);
     })();
   }, [post.id]);
 
-  async function toggleLike() {
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) {
-      toast.error("Sign in to like posts.");
+  const grouped = POST_REACTION_EMOJIS.map((emoji) => {
+    const rs = reactions.filter((r) => r.emoji === emoji);
+    return { emoji, count: rs.length, mine: me ? rs.some((r) => r.user_id === me) : false };
+  }).filter((g) => g.count > 0);
+
+  async function toggleReaction(emoji: string) {
+    if (!me) {
+      toast.error("Sign in to react.");
       return;
     }
-    if (liked) {
-      await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", u.user.id);
-      setLiked(false);
-      setLikeCount((c) => c - 1);
+    const mine = reactions.find((r) => r.emoji === emoji && r.user_id === me);
+    if (mine) {
+      await supabase.from("post_reactions").delete().eq("post_id", post.id).eq("user_id", me).eq("emoji", emoji);
+      setReactions((cur) => cur.filter((r) => !(r.emoji === emoji && r.user_id === me)));
     } else {
-      await supabase.from("post_likes").insert({ post_id: post.id, user_id: u.user.id });
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+      await supabase.from("post_reactions").insert({ post_id: post.id, user_id: me, emoji });
+      setReactions((cur) => [...cur, { emoji, user_id: me }]);
     }
+    setShowReactionPicker(false);
   }
 
   async function loadComments() {
@@ -155,92 +175,141 @@ function PostCard({
   }
 
   async function addComment() {
-    if (!comment.trim()) return;
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) {
-      toast.error("Sign in to comment.");
-      return;
-    }
+    if (!comment.trim() || !me) return;
     const { data, error } = await supabase
       .from("post_comments")
-      .insert({ post_id: post.id, user_id: u.user.id, content: comment.trim() })
+      .insert({ post_id: post.id, user_id: me, content: comment.trim() })
       .select()
       .single();
     if (error) toast.error(error.message);
     else {
-      const { data: prof } = await supabase.from("profiles").select("username").eq("id", u.user.id).single();
+      const { data: prof } = await supabase.from("profiles").select("username").eq("id", me).single();
       setComments((c) => [...c, { ...data, username: prof?.username }]);
       setCommentCount((c) => c + 1);
       setComment("");
     }
   }
 
+  const totalReactions = reactions.length;
+
   return (
-    <article className="paper-card overflow-hidden group">
-      <Link to="/post/$postId" params={{ postId: post.id }} className="block relative aspect-[4/5] bg-paper-2 grain overflow-hidden">
-        <img src={post.image_url} alt={post.prompt ?? ""} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-4">
-          <div className="flex items-center gap-2">
-            {post.author?.avatar_url ? (
-              <img src={post.author.avatar_url} alt="" className="size-7 rounded-full border border-white/30 object-cover" />
-            ) : (
-              <span className="size-7 rounded-full bg-white/20 grid place-items-center text-xs font-mono text-white">
-                {post.author?.username?.[0] ?? "?"}
-              </span>
-            )}
-            <div className="mono-label text-white/90">@{post.author?.username ?? "anon"}</div>
-            {post.source === "upload" && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white">UPLOAD</span>}
+    <article className="paper-card overflow-hidden">
+      <div className="flex items-start gap-3 p-4 border-b border-line">
+        <Link to="/post/$postId" params={{ postId: post.id }}>
+          {post.author?.avatar_url ? (
+            <img src={post.author.avatar_url} alt="" className="size-12 rounded-full border border-line object-cover" />
+          ) : (
+            <span className="size-12 rounded-full bg-paper-2 border border-line grid place-items-center font-mono text-lg">
+              {post.author?.username?.[0] ?? "?"}
+            </span>
+          )}
+        </Link>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link to="/post/$postId" params={{ postId: post.id }} className="font-display text-lg uppercase hover:text-primary">
+              {post.author?.display_name ?? post.author?.username ?? "anon"}
+            </Link>
+            <span className="mono-label">@{post.author?.username ?? "anon"}</span>
+            {post.source === "upload" && <span className="text-[10px] bg-paper-2 px-1.5 py-0.5 rounded mono-label">UPLOAD</span>}
           </div>
-          {post.caption && <p className="text-white text-sm mt-2 line-clamp-2">{post.caption}</p>}
+          <div className="text-xs text-muted-foreground mt-0.5">{timeAgo(post.created_at)}</div>
         </div>
         {post.avgRating !== null && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs">
-            <Star className="size-3 fill-primary text-primary" />
+          <div className="flex items-center gap-1 text-xs shrink-0">
+            <Star className="size-3.5 fill-primary text-primary" />
             {post.avgRating.toFixed(1)}
           </div>
         )}
-      </Link>
-      <div className="flex items-center gap-4 border-t border-line px-4 py-3">
-        <button type="button" onClick={toggleLike} className={`mono-label flex items-center gap-1 ${liked ? "text-primary" : ""}`}>
-          ♥ {likeCount}
-        </button>
-        <button type="button" onClick={loadComments} className="mono-label flex items-center gap-1">
-          <MessageCircle className="size-3.5" /> {commentCount}
-        </button>
-        <button
-          type="button"
-          onClick={() => downloadUrl(post.image_url, `kinetik-${post.id.slice(0, 8)}.png`)}
-          className="mono-label flex items-center gap-1 hover:text-primary"
-        >
-          <Download className="size-3.5" />
-        </button>
-        <Link to="/post/$postId" params={{ postId: post.id }} className="mono-label ml-auto flex items-center gap-1 hover:text-primary">
-          <Star className="size-3.5" /> {post.reviewCount} reviews
-        </Link>
       </div>
+
+      {(post.caption || post.prompt) && (
+        <div className="px-4 py-3 text-sm leading-relaxed">
+          {post.caption && <p>{post.caption}</p>}
+          {post.prompt && !post.caption && <p className="text-muted-foreground italic">{post.prompt}</p>}
+        </div>
+      )}
+
+      <Link to="/post/$postId" params={{ postId: post.id }} className="block bg-paper-2">
+        <img src={post.image_url} alt={post.prompt ?? ""} className="w-full max-h-[520px] object-contain" loading="lazy" />
+      </Link>
+
+      <div className="px-4 py-2 border-t border-line">
+        {grouped.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {grouped.map((g) => (
+              <button
+                key={g.emoji}
+                type="button"
+                onClick={() => toggleReaction(g.emoji)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+                  g.mine ? "border-primary bg-primary/10" : "border-line bg-card"
+                }`}
+              >
+                {g.emoji} {g.count}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 py-1">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => (loggedIn ? setShowReactionPicker((s) => !s) : toast.error("Sign in to react."))}
+              className="mono-label flex items-center gap-1 hover:text-primary"
+            >
+              React {totalReactions > 0 && `· ${totalReactions}`}
+            </button>
+            {showReactionPicker && (
+              <div className="absolute bottom-full left-0 mb-1 flex gap-1 border border-line bg-card px-2 py-1 rounded-full shadow-lg z-10">
+                {POST_REACTION_EMOJIS.map((emoji) => (
+                  <button key={emoji} type="button" onClick={() => toggleReaction(emoji)} className="text-lg hover:scale-125 transition-transform">
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={loadComments} className="mono-label flex items-center gap-1 hover:text-primary">
+            <MessageCircle className="size-3.5" /> {commentCount} {commentCount === 1 ? "comment" : "comments"}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadUrl(post.image_url, `kinetik-${post.id.slice(0, 8)}.png`)}
+            className="mono-label flex items-center gap-1 hover:text-primary"
+          >
+            <Download className="size-3.5" />
+          </button>
+          <Link to="/post/$postId" params={{ postId: post.id }} className="mono-label ml-auto flex items-center gap-1 hover:text-primary">
+            <Star className="size-3.5" /> {post.reviewCount} reviews
+          </Link>
+        </div>
+      </div>
+
       {showComments && (
-        <div className="border-t border-line p-4 space-y-2">
+        <div className="border-t border-line px-4 py-3 space-y-3 bg-paper-2/50">
           {comments.map((c) => (
-            <div key={c.id} className="text-xs">
+            <div key={c.id} className="text-sm">
               <span className="mono-label mr-2">@{c.username ?? "user"}</span>
-              {c.content}
+              <span>{c.content}</span>
             </div>
           ))}
+          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
           {loggedIn ? (
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <input
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addComment()}
-                placeholder="Comment..."
-                className="flex-1 border border-line bg-background px-2 py-1 text-xs focus:border-primary focus:outline-none"
+                placeholder="Add a comment..."
+                className="flex-1 border border-line bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               />
-              <button type="button" onClick={addComment} className="ink-button px-3 py-1 text-xs">
-                Send
+              <button type="button" onClick={addComment} className="ink-button px-4 py-2 text-xs">
+                Post
               </button>
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground pt-2">
+            <p className="text-xs text-muted-foreground">
               <Link to="/auth" className="text-primary hover:underline">
                 Sign in
               </Link>{" "}

@@ -1,8 +1,11 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useUnreadCounts } from "@/hooks/use-unread-counts";
 import logo from "@/assets/logo.png";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", code: "00" },
@@ -17,6 +20,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [me, setMe] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+
+  const { counts } = useUnreadCounts(me);
+  const channelBadge = counts.totalMessages;
 
   const profile = useQuery({
     queryKey: ["my-profile"],
@@ -54,20 +65,31 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="font-display text-xl uppercase tracking-tighter">Kinetik_</span>
             </Link>
             <nav className="mt-10 flex flex-col gap-1">
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`group flex items-center gap-3 border-l-2 px-3 py-3 transition-colors ${isActive(item.to) ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"}`}
-                >
-                  <span className="mono-label">{item.code}</span>
-                  <span className={`font-display text-lg uppercase ${isActive(item.to) ? "text-primary" : ""}`}>{item.label}</span>
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const badge = item.to === "/messages" ? channelBadge : 0;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={`group flex items-center gap-3 border-l-2 px-3 py-3 transition-colors ${isActive(item.to) ? "border-primary bg-card" : "border-transparent hover:border-foreground/40"}`}
+                  >
+                    <span className="mono-label">{item.code}</span>
+                    <span className={`font-display text-lg uppercase flex-1 ${isActive(item.to) ? "text-primary" : ""}`}>{item.label}</span>
+                    {badge > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-mono grid place-items-center">
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </nav>
           </div>
           <div>
-            {profile.data && <div className="mono-label mb-3 text-muted-foreground">@{profile.data.username}</div>}
+            <div className="flex items-center justify-between mb-3">
+              {profile.data && <div className="mono-label text-muted-foreground">@{profile.data.username}</div>}
+              <NotificationBell />
+            </div>
             <button onClick={signOut} className="w-full border border-foreground/30 py-2 text-sm font-medium hover:bg-foreground hover:text-background transition-colors">
               Sign out
             </button>
@@ -79,9 +101,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <img src={logo} alt="" className="size-7" width={28} height={28} />
             <span className="font-display text-lg uppercase">Kinetik_</span>
           </Link>
-          <button onClick={signOut} className="mono-label">
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button onClick={signOut} className="mono-label">
+              Sign out
+            </button>
+          </div>
         </header>
 
         <main className="overflow-x-hidden min-w-0">
