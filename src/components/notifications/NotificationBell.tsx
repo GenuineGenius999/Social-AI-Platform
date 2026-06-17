@@ -1,12 +1,29 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
-import { useNotificationContext } from "./NotificationProvider";
+import { useOptionalNotificationContext } from "./NotificationProvider";
 import { notificationStyleClass } from "@/lib/notifications";
 
 export function NotificationBell() {
-  const { items, unread, markRead, markAllRead } = useNotificationContext();
+  const ctx = useOptionalNotificationContext();
   const [open, setOpen] = useState(false);
+
+  // AppShell is used in some public routes (e.g. /post/$postId when authed),
+  // so the bell must not crash if the provider isn't mounted.
+  if (!ctx) {
+    return (
+      <button
+        type="button"
+        className="relative border border-line p-2 hover:bg-paper-2 transition-colors"
+        aria-label="Notifications"
+        title="Notifications"
+      >
+        <Bell className="size-4" />
+      </button>
+    );
+  }
+
+  const { items, unread, markRead, markAllRead } = ctx;
 
   return (
     <div className="relative">
