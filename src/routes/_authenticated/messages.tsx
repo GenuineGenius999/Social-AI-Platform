@@ -229,7 +229,14 @@ function CreateGroupModal({
       toast.success("Group created");
       onCreated(group.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to create group");
+      const msg = e instanceof Error ? e.message : "Failed to create group";
+      if (/row-level security|permission denied|violates/i.test(msg)) {
+        toast.error("Group create blocked by DB policy. Run migration: supabase/migrations/20260612150000_messaging_notifications.sql");
+      } else if (/relation .* does not exist|could not find the table/i.test(msg)) {
+        toast.error("Database schema missing. Run supabase/bootstrap.sql or migrations in Supabase SQL Editor.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
