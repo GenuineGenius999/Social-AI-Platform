@@ -87,6 +87,13 @@ export function useUnreadCounts(me: string | null) {
     refresh();
     if (!me) return;
 
+    // React StrictMode (and fast refresh) can mount/unmount twice; ensure we don't
+    // reuse an already-subscribed channel with the same topic.
+    const topic = `realtime:unread-${me}`;
+    for (const existing of supabase.getChannels()) {
+      if (existing.topic === topic) supabase.removeChannel(existing);
+    }
+
     const ch = supabase
       .channel(`unread-${me}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "direct_messages" }, refresh)
