@@ -10,10 +10,20 @@ CREATE TABLE public.profiles (
   username TEXT UNIQUE NOT NULL,
   display_name TEXT,
   avatar_url TEXT,
+  gender TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'profiles_gender_check'
+  ) THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_gender_check CHECK (gender IS NULL OR gender IN ('male','female','other'));
+  END IF;
+END $$;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
 GRANT SELECT ON public.profiles TO anon;
 GRANT ALL ON public.profiles TO service_role;
@@ -42,12 +52,22 @@ BEGIN
     counter := counter + 1;
     final_username := base_username || counter::text;
   END LOOP;
-  INSERT INTO public.profiles (id, username, display_name, avatar_url)
+  INSERT INTO public.profiles (id, username, display_name, avatar_url, gender)
   VALUES (
     NEW.id,
     final_username,
     COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'full_name', final_username),
-    NEW.raw_user_meta_data->>'avatar_url'
+    COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      CASE
+        WHEN lower(COALESCE(NEW.raw_user_meta_data->>'gender','')) = 'female'
+          THEN 'https://i.postimg.cc/TwXFHVwW/d1776321-55e5-4c0f-aa56-754ce2798bfa.jpg'
+        WHEN lower(COALESCE(NEW.raw_user_meta_data->>'gender','')) = 'male'
+          THEN 'https://i.postimg.cc/tJkK6s9n/1c7c50c4-7292-4577-beb0-8bc7270f6c05.jpg'
+        ELSE NULL
+      END
+    ),
+    NULLIF(lower(COALESCE(NEW.raw_user_meta_data->>'gender','')), '')
   );
   RETURN NEW;
 END;

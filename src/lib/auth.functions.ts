@@ -5,6 +5,7 @@ const SignUpInput = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   username: z.string().min(3).max(30),
+  gender: z.enum(["male", "female", "other"]).optional(),
 });
 
 /** Creates the user server-side (no confirmation email) to avoid Supabase SMTP rate limits. */
@@ -21,7 +22,7 @@ export const signUpWithEmail = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       email_confirm: true,
-      user_metadata: { username: data.username, is_admin: isAdmin },
+      user_metadata: { username: data.username, is_admin: isAdmin, gender: data.gender ?? null },
     });
 
     if (createError) {

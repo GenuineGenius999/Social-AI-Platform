@@ -27,6 +27,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "other">("male");
   const [loading, setLoading] = useState(false);
   const signUp = useServerFn(signUpWithEmail);
 
@@ -41,7 +42,7 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const session = await signUp({ data: { email, password, username } });
+        const session = await signUp({ data: { email, password, username, gender } });
         const { error } = await supabase.auth.setSession(session);
         if (error) throw error;
         toast.success("Account created. Welcome to the workshop.");
@@ -119,6 +120,20 @@ function AuthPage() {
               <div>
                 <label className="mono-label block mb-1">USERNAME</label>
                 <input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} className="w-full border border-foreground/30 bg-card px-3 py-3 font-mono text-sm focus:border-primary focus:outline-none" placeholder="loom_master" />
+              </div>
+            )}
+            {mode === "signup" && (
+              <div>
+                <label className="mono-label block mb-1">GENDER</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as "male" | "female" | "other")}
+                  className="w-full border border-foreground/30 bg-card px-3 py-3 font-mono text-sm focus:border-primary focus:outline-none"
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
             )}
             <div>

@@ -36,7 +36,9 @@ export function OnlineDot({ userId, className = "" }: { userId: string; classNam
   const isOnline = online.data?.has(userId) ?? false;
   return (
     <span
-      className={`inline-block size-2 shrink-0 rounded-full border border-background ${isOnline ? "bg-green-500 live-dot" : "bg-muted-foreground/40"} ${className}`}
+      className={`inline-block size-2 shrink-0 rounded-full border border-background ${
+        isOnline ? "bg-green-500 live-dot" : "bg-muted-foreground/40"
+      } ${className}`}
       title={isOnline ? "Online" : "Offline"}
     />
   );
@@ -54,3 +56,4 @@ export function useIsOnline(userId: string | null) {
   }, [userId, online.data]);
   return isOnline;
 }
+
