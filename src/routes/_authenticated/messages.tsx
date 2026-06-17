@@ -265,6 +265,7 @@ function CreateGroupModal({
 }
 
 type BaseMsg = { id: string; user_id: string; content: string; image_url?: string | null; created_at: string; deleted_at?: string | null };
+type DmMsg = { id: string; sender_id: string; recipient_id: string; content: string; image_url?: string | null; created_at: string; deleted_at?: string | null };
 
 function GlobalRoom({ me, users, onRead }: { me: string; users: Profile[]; onRead: () => void }) {
   const [msgs, setMsgs] = useState<BaseMsg[]>([]);
@@ -299,7 +300,9 @@ function GlobalRoom({ me, users, onRead }: { me: string; users: Profile[]; onRea
 
   async function send({ content, imageUrl }: { content: string; imageUrl?: string | null }) {
     if (!content && !imageUrl) return;
-    const { error } = await supabase.from("global_messages").insert({ user_id: me, content: content || " ", image_url: imageUrl ?? null });
+    const { error } = await supabase
+      .from("global_messages")
+      .insert({ user_id: me, content: content || " ", image_url: imageUrl ?? null } as never);
     if (error) toast.error(friendlyDbError(error.message));
   }
 
@@ -344,7 +347,7 @@ function GlobalRoom({ me, users, onRead }: { me: string; users: Profile[]; onRea
 }
 
 function DmRoom({ me, other, users, onRead }: { me: string; other: string; users: Profile[]; onRead: () => void }) {
-  const [msgs, setMsgs] = useState<(BaseMsg & { sender_id: string; recipient_id: string; image_url?: string | null })[]>([]);
+  const [msgs, setMsgs] = useState<DmMsg[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { blocked, blockUser } = useBlockedUsers(me);
@@ -358,9 +361,9 @@ function DmRoom({ me, other, users, onRead }: { me: string; other: string; users
     supabase.from("direct_messages").select("*")
       .or(`and(sender_id.eq.${me},recipient_id.eq.${other}),and(sender_id.eq.${other},recipient_id.eq.${me})`)
       .order("created_at", { ascending: true })
-      .then(({ data }) => setMsgs((data ?? []) as typeof msgs));
+      .then(({ data }) => setMsgs((data ?? []) as DmMsg[]));
     const ch = supabase.channel(`dm-${me}-${other}`).on("postgres_changes", { event: "*", schema: "public", table: "direct_messages" }, (payload) => {
-      const m = payload.new as typeof msgs[0];
+      const m = payload.new as DmMsg;
       if (payload.eventType === "INSERT" && ((m.sender_id === me && m.recipient_id === other) || (m.sender_id === other && m.recipient_id === me))) {
         setMsgs((cur) => [...cur, m]);
       }
@@ -383,7 +386,7 @@ function DmRoom({ me, other, users, onRead }: { me: string; other: string; users
       recipient_id: other,
       content: content || " ",
       image_url: imageUrl ?? null,
-    });
+    } as never);
     if (error) toast.error(error.message);
   }
 
@@ -458,7 +461,7 @@ function GroupRoom({ me, groupId, groupName, users, onRead }: { me: string; grou
       user_id: me,
       content: content || " ",
       image_url: imageUrl ?? null,
-    });
+    } as never);
     if (error) toast.error(error.message);
   }
 

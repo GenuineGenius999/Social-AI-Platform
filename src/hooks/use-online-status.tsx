@@ -4,6 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
+// Singleton realtime channel (avoids "postgres_changes after subscribe()" crashes)
+let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
+let presenceUsers = 0;
+
 export function useOnlineUsers() {
   const qc = useQueryClient();
   const query = useQuery({
@@ -17,14 +21,23 @@ export function useOnlineUsers() {
   });
 
   useEffect(() => {
-    const ch = supabase
-      .channel("online-presence")
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
-        qc.invalidateQueries({ queryKey: ["online-users"] });
-      })
-      .subscribe();
+    presenceUsers += 1;
+    if (!presenceChannel) {
+      presenceChannel = supabase
+        .channel("online-presence")
+        .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
+          qc.invalidateQueries({ queryKey: ["online-users"] });
+        })
+        .subscribe();
+    }
+
     return () => {
-      supabase.removeChannel(ch);
+      presenceUsers -= 1;
+      if (presenceUsers <= 0 && presenceChannel) {
+        supabase.removeChannel(presenceChannel);
+        presenceChannel = null;
+        presenceUsers = 0;
+      }
     };
   }, [qc]);
 
