@@ -6,6 +6,7 @@ import { REACTION_EMOJIS } from "@/lib/chat.types";
 type Props = {
   id: string;
   content: string;
+  imageUrl?: string | null;
   channel: MessageChannel;
   isOwn: boolean;
   author?: Profile;
@@ -20,6 +21,7 @@ type Props = {
 export function MessageBubble({
   id,
   content,
+  imageUrl,
   isOwn,
   author,
   reactions,
@@ -57,7 +59,12 @@ export function MessageBubble({
               : "bg-card border border-line rounded-2xl rounded-tl-sm"
           }`}
         >
-          <p className="whitespace-pre-wrap">{content}</p>
+          {imageUrl && (
+            <a href={imageUrl} target="_blank" rel="noreferrer" className="block mb-2">
+              <img src={imageUrl} alt="" className="max-w-full max-h-64 rounded-lg border border-line/50" />
+            </a>
+          )}
+          {content && <p className="whitespace-pre-wrap">{content}</p>}
           <div className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
             <button
               type="button"

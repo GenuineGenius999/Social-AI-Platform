@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePresence } from "@/hooks/use-presence";
+import { NotificationProvider } from "@/components/notifications/NotificationProvider";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -26,6 +28,20 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
+  const [me, setMe] = useState<string | null>(null);
   usePresence();
-  return <Outlet />;
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setMe(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return (
+    <NotificationProvider me={me}>
+      <Outlet />
+    </NotificationProvider>
+  );
 }

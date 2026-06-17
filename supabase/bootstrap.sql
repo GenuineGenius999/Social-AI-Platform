@@ -10,10 +10,20 @@ CREATE TABLE public.profiles (
   username TEXT UNIQUE NOT NULL,
   display_name TEXT,
   avatar_url TEXT,
+  gender TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'profiles_gender_check'
+  ) THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_gender_check CHECK (gender IS NULL OR gender IN ('male','female','other'));
+  END IF;
+END $$;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
 GRANT SELECT ON public.profiles TO anon;
 GRANT ALL ON public.profiles TO service_role;
@@ -42,12 +52,22 @@ BEGIN
     counter := counter + 1;
     final_username := base_username || counter::text;
   END LOOP;
-  INSERT INTO public.profiles (id, username, display_name, avatar_url)
+  INSERT INTO public.profiles (id, username, display_name, avatar_url, gender)
   VALUES (
     NEW.id,
     final_username,
     COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'full_name', final_username),
-    NEW.raw_user_meta_data->>'avatar_url'
+    COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      CASE
+        WHEN lower(COALESCE(NEW.raw_user_meta_data->>'gender','')) = 'female'
+          THEN 'https://i.postimg.cc/TwXFHVwW/d1776321-55e5-4c0f-aa56-754ce2798bfa.jpg'
+        WHEN lower(COALESCE(NEW.raw_user_meta_data->>'gender','')) = 'male'
+          THEN 'https://i.postimg.cc/tJkK6s9n/1c7c50c4-7292-4577-beb0-8bc7270f6c05.jpg'
+        ELSE NULL
+      END
+    ),
+    NULLIF(lower(COALESCE(NEW.raw_user_meta_data->>'gender','')), '')
   );
   RETURN NEW;
 END;
@@ -511,3 +531,74 @@ UPDATE public.profiles p
 SET is_admin = true
 FROM auth.users u
 WHERE p.id = u.id AND u.email = 'admin@genai.com';
+
+-- =============================================================================
+-- Messaging, notifications, reactions (20260612150000)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('new_post','new_message','new_comment','new_like','new_group_message','new_global_message','system')),
+  title TEXT NOT NULL,
+  body TEXT,
+  link TEXT,
+  style_idx SMALLINT NOT NULL DEFAULT 0 CHECK (style_idx BETWEEN 0 AND 7),
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_unread_idx ON public.notifications(user_id, read_at, created_at DESC);
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications TO authenticated;
+GRANT ALL ON public.notifications TO service_role;
+CREATE POLICY "notifications_own" ON public.notifications FOR ALL TO authenticated
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+CREATE TABLE IF NOT EXISTS public.read_cursors (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  channel public.message_channel NOT NULL,
+  thread_id TEXT NOT NULL,
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, channel, thread_id)
+);
+ALTER TABLE public.read_cursors ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.read_cursors TO authenticated;
+GRANT ALL ON public.read_cursors TO service_role;
+CREATE POLICY "read_cursors_own" ON public.read_cursors FOR ALL TO authenticated
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS public.post_reactions (
+  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL CHECK (length(emoji) BETWEEN 1 AND 8),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (post_id, user_id, emoji)
+);
+ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, DELETE ON public.post_reactions TO authenticated;
+GRANT SELECT ON public.post_reactions TO anon;
+GRANT ALL ON public.post_reactions TO service_role;
+CREATE POLICY "post_reactions_select" ON public.post_reactions FOR SELECT USING (true);
+CREATE POLICY "post_reactions_insert_own" ON public.post_reactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "post_reactions_delete_own" ON public.post_reactions FOR DELETE USING (auth.uid() = user_id);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.post_reactions;
+
+ALTER TABLE public.global_messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.direct_messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.group_messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+DROP POLICY IF EXISTS "group_members_insert" ON public.chat_group_members;
+CREATE POLICY "group_members_insert" ON public.chat_group_members FOR INSERT TO authenticated
+  WITH CHECK (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.chat_group_members m
+      WHERE m.group_id = chat_group_members.group_id AND m.user_id = auth.uid() AND m.role = 'admin'
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.chat_groups g
+      WHERE g.id = chat_group_members.group_id AND g.created_by = auth.uid()
+    )
+  );
