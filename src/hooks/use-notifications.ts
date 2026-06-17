@@ -27,6 +27,11 @@ export function useNotifications(me: string | null) {
     load();
     if (!me) return;
 
+    const topic = `realtime:notifications-${me}`;
+    for (const existing of supabase.getChannels()) {
+      if (existing.topic === topic) supabase.removeChannel(existing);
+    }
+
     const ch = supabase
       .channel(`notifications-${me}`)
       .on(

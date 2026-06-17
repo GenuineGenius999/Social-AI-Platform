@@ -49,6 +49,11 @@ export function NotificationProvider({ me, children }: { me: string | null; chil
   useEffect(() => {
     if (!me) return;
 
+    const topic = `realtime:notify-events-${me}`;
+    for (const existing of supabase.getChannels()) {
+      if (existing.topic === topic) supabase.removeChannel(existing);
+    }
+
     const ch = supabase
       .channel(`notify-events-${me}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, async (payload) => {
