@@ -14,6 +14,10 @@ export function useNotificationContext() {
   return ctx;
 }
 
+export function useOptionalNotificationContext() {
+  return useContext(NotificationCtx);
+}
+
 function showStyledToast(n: AppNotification, onClick?: () => void) {
   const styleClass = notificationStyleClass(n.style_idx);
   toast(n.title, {
