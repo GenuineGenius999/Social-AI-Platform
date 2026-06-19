@@ -5,8 +5,10 @@ import { AppShell } from "@/components/AppShell";
 import { PublicShell } from "@/components/PublicShell";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Star } from "lucide-react";
+import { ArrowLeft, Download, Star, Trash2 } from "lucide-react";
 import { POST_REACTION_EMOJIS } from "@/components/FeedGrid";
+import { PostMedia } from "@/components/PostMedia";
+import { UserAvatar } from "@/components/UserAvatar";
 import { downloadUrl } from "@/lib/download-client";
 
 export const Route = createFileRoute("/post/$postId")({
@@ -36,6 +38,7 @@ function PostDetail() {
   const qc = useQueryClient();
   const [me, setMe] = useState<string | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [liked, setLiked] = useState(false);
@@ -46,9 +49,13 @@ function PostDetail() {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       setMe(data.user?.id ?? null);
       setAuthed(!!data.user);
+      if (data.user) {
+        const { data: prof } = await supabase.from("profiles").select("is_admin").eq("id", data.user.id).single();
+        setIsAdmin(!!(prof as { is_admin?: boolean } | null)?.is_admin);
+      }
     });
   }, []);
 
@@ -62,7 +69,9 @@ function PostDetail() {
         .select("id,username,display_name,avatar_url")
         .eq("id", p.user_id)
         .single();
-      return { ...(p as Post), author };
+      const { data: imgs } = await supabase.from("post_images").select("image_url,sort_order").eq("post_id", postId).order("sort_order");
+      const images = (imgs ?? []).length > 0 ? (imgs ?? []).map((i) => i.image_url) : [p.image_url];
+      return { ...(p as Post), author, images };
     },
   });
 
@@ -181,6 +190,22 @@ function PostDetail() {
     }
   }
 
+  async function deletePost() {
+    if (!me) return;
+    const owner = post.data?.user_id === me;
+    if (!owner && !isAdmin) {
+      toast.error("You can only delete your own posts.");
+      return;
+    }
+    if (!confirm(owner ? "Delete your post?" : "Delete this post as admin?")) return;
+    const { error } = await supabase.from("posts").delete().eq("id", postId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Post deleted");
+      window.location.href = "/feed";
+    }
+  }
+
   const avgRating = reviews.data?.length
     ? (reviews.data.reduce((s, r) => s + r.rating, 0) / reviews.data.length).toFixed(1)
     : null;
@@ -212,17 +237,16 @@ function PostDetail() {
 
         <article className="paper-card overflow-hidden">
           <div className="flex items-start gap-3 p-4 border-b border-line">
-            {p.author?.avatar_url ? (
-              <img src={p.author.avatar_url} alt="" className="size-12 rounded-full border border-line object-cover" />
-            ) : (
-              <span className="size-12 rounded-full bg-paper-2 border border-line grid place-items-center font-mono text-lg">
-                {p.author?.username?.[0] ?? "?"}
-              </span>
-            )}
-            <div>
+            <UserAvatar avatarUrl={p.author?.avatar_url} username={p.author?.username} size="lg" />
+            <div className="flex-1">
               <h1 className="font-display text-2xl uppercase">{p.author?.display_name ?? p.author?.username ?? "maker"}</h1>
               <div className="mono-label">@{p.author?.username ?? "maker"}</div>
             </div>
+            {me && (p.user_id === me || isAdmin) && (
+              <button type="button" onClick={deletePost} className="text-muted-foreground hover:text-destructive p-1" title="Delete post">
+                <Trash2 className="size-4" />
+              </button>
+            )}
           </div>
 
           {(p.caption || p.prompt) && (
@@ -238,11 +262,11 @@ function PostDetail() {
           )}
 
           <div className="relative bg-paper-2">
-            <img src={p.image_url} alt={p.prompt ?? "Post image"} className="w-full max-h-[600px] object-contain" />
+            <PostMedia images={(p as { images?: string[] }).images ?? [p.image_url]} alt={p.prompt ?? "Post image"} imgClassName="w-full max-h-[600px] object-contain" />
             <button
               type="button"
               onClick={() => downloadUrl(p.image_url, `kinetik-${p.id.slice(0, 8)}.png`)}
-              className="absolute top-3 right-3 bg-black/60 text-white p-2 rounded-full hover:bg-black/80"
+              className="absolute top-3 right-3 bg-black/60 text-white p-2 rounded-full hover:bg-black/80 z-10"
             >
               <Download className="size-4" />
             </button>

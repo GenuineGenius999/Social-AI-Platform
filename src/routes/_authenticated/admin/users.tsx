@@ -66,6 +66,7 @@ function AdminUsers() {
                 <th className="p-3">Email</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Online</th>
+                <th className="p-3">IP / Country</th>
                 <th className="p-3">Machines</th>
                 <th className="p-3">Actions</th>
               </tr>
@@ -86,6 +87,16 @@ function AdminUsers() {
                   <td className="p-3">
                     <span className={`inline-block size-2 rounded-full mr-2 ${u.isOnline ? "bg-green-500" : "bg-muted-foreground"}`} />
                     {u.isOnline ? "Online" : "Offline"}
+                  </td>
+                  <td className="p-3 text-xs font-mono">
+                    {u.machines[0]?.ipAddress ? (
+                      <div>
+                        <div>{u.machines[0].ipAddress}</div>
+                        <div className="text-muted-foreground">{u.machines[0].countryName || "—"}</div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="p-3">
                     {u.machines.length === 0 ? (

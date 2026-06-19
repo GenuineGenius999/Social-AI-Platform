@@ -199,10 +199,10 @@
   to { transform: scale(1); opacity: 1; }
 }
 
-.notify-style-0 {
-  background: linear-gradient(135deg, oklch(0.94 0.04 80), oklch(0.98 0.02 80)) !important;
-  border-left: 4px solid oklch(0.75 0.15 75) !important;
-  animation: notifySlideDown 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+.notify-toast {
+  background: oklch(0.98 0.01 80) !important;
+  border: 2px solid oklch(0.58 0.165 35) !important;
+  border-left: 4px solid oklch(0.58 0.165 35) !important;
 }
 .notify-style-1 {
   background: linear-gradient(135deg, oklch(0.94 0.03 250), oklch(0.98 0.01 250)) !important;

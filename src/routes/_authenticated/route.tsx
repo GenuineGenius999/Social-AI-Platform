@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePresence } from "@/hooks/use-presence";
 import { NotificationProvider } from "@/components/notifications/NotificationProvider";
+import { ActiveChatProvider } from "@/hooks/use-active-chat";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -40,8 +41,10 @@ function AuthenticatedLayout() {
   }, []);
 
   return (
-    <NotificationProvider me={me}>
-      <Outlet />
-    </NotificationProvider>
+    <ActiveChatProvider>
+      <NotificationProvider me={me}>
+        <Outlet />
+      </NotificationProvider>
+    </ActiveChatProvider>
   );
 }

@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { createNotification, notificationStyleClass, type AppNotification } from "@/lib/notifications";
+import { createNotification, type AppNotification } from "@/lib/notifications";
 import { toast } from "sonner";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useActiveChat } from "@/hooks/use-active-chat";
 
 type Ctx = ReturnType<typeof useNotifications>;
 const NotificationCtx = createContext<Ctx | null>(null);
@@ -19,11 +20,10 @@ export function useOptionalNotificationContext() {
 }
 
 function showStyledToast(n: AppNotification, onClick?: () => void) {
-  const styleClass = notificationStyleClass(n.style_idx);
   toast(n.title, {
     description: n.body ?? undefined,
     duration: 6000,
-    className: styleClass,
+    className: "notify-toast",
     action: n.link
       ? {
           label: "View",
@@ -36,6 +36,7 @@ function showStyledToast(n: AppNotification, onClick?: () => void) {
 export function NotificationProvider({ me, children }: { me: string | null; children: ReactNode }) {
   const nav = useNavigate();
   const notif = useNotifications(me);
+  const activeChat = useActiveChat();
   const groupIdsRef = useRef<Set<string>>(new Set());
   const shownToastIds = useRef<Set<string>>(new Set());
 
@@ -63,6 +64,8 @@ export function NotificationProvider({ me, children }: { me: string | null; chil
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, async (payload) => {
         const m = payload.new as { recipient_id: string; sender_id: string; content: string; id: string };
         if (m.recipient_id !== me) return;
+        if (activeChat.tab === "dm" && activeChat.dmUserId === m.sender_id) return;
+
         const { data: prof } = await supabase.from("profiles").select("username").eq("id", m.sender_id).single();
         try {
           await createNotification({
@@ -79,6 +82,8 @@ export function NotificationProvider({ me, children }: { me: string | null; chil
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages" }, async (payload) => {
         const m = payload.new as { group_id: string; user_id: string; content: string };
         if (m.user_id === me || !groupIdsRef.current.has(m.group_id)) return;
+        if (activeChat.tab === "groups" && activeChat.groupId === m.group_id) return;
+
         const { data: group } = await supabase.from("chat_groups").select("name").eq("id", m.group_id).single();
         try {
           await createNotification({
@@ -131,7 +136,7 @@ export function NotificationProvider({ me, children }: { me: string | null; chil
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [me]);
+  }, [me, activeChat.tab, activeChat.dmUserId, activeChat.groupId]);
 
   useEffect(() => {
     const latest = notif.items[0];

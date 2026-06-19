@@ -49,7 +49,7 @@ export const getAdminUsers = createServerFn({ method: "GET" })
 
     const { data: sessions } = await supabaseAdmin
       .from("user_sessions")
-      .select("user_id,machine_id,machine_number,os_name,os_version,last_seen_at")
+      .select("user_id,machine_id,machine_number,os_name,os_version,last_seen_at,ip_address,country_name")
       .order("last_seen_at", { ascending: false });
 
     const sessionsByUser = new Map<string, typeof sessions>();
@@ -72,6 +72,8 @@ export const getAdminUsers = createServerFn({ method: "GET" })
           machineNumber: s.machine_number,
           osName: s.os_name ?? "Unknown",
           osVersion: s.os_version ?? "",
+          ipAddress: (s as { ip_address?: string | null }).ip_address ?? "",
+          countryName: (s as { country_name?: string | null }).country_name ?? "",
           lastSeenAt: s.last_seen_at,
           isOnline: new Date(s.last_seen_at).getTime() > Date.now() - ONLINE_THRESHOLD_MS,
         })),

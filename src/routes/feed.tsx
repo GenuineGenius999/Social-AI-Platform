@@ -38,7 +38,7 @@ function FeedPage() {
         </p>
       </div>
       {authed && <PostComposer onPosted={() => qc.invalidateQueries({ queryKey: ["feed"] })} />}
-      <FeedGrid showHeader={false} />
+      <FeedGrid showHeader={false} showMoreButton />
     </div>
   );
 

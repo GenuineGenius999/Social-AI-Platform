@@ -2,14 +2,21 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import { useOptionalNotificationContext } from "./NotificationProvider";
-import { notificationStyleClass } from "@/lib/notifications";
+
+const TYPE_LABELS: Record<string, string> = {
+  new_post: "Post",
+  new_message: "Message",
+  new_comment: "Comment",
+  new_like: "Like",
+  new_group_message: "Group",
+  new_global_message: "Global",
+  system: "System",
+};
 
 export function NotificationBell() {
   const ctx = useOptionalNotificationContext();
   const [open, setOpen] = useState(false);
 
-  // AppShell is used in some public routes (e.g. /post/$postId when authed),
-  // so the bell must not crash if the provider isn't mounted.
   if (!ctx) {
     return (
       <button
@@ -44,8 +51,8 @@ export function NotificationBell() {
       {open && (
         <>
           <button type="button" className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-label="Close" />
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 max-h-96 overflow-y-auto border-2 border-foreground bg-card shadow-lg">
-            <div className="flex items-center justify-between border-b border-line px-3 py-2">
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 max-h-[min(24rem,70vh)] overflow-hidden border-2 border-foreground bg-card shadow-lg flex flex-col">
+            <div className="flex items-center justify-between border-b border-line px-3 py-2 shrink-0 bg-paper-2">
               <span className="mono-label">Alerts</span>
               {unread > 0 && (
                 <button type="button" onClick={markAllRead} className="text-xs text-primary hover:underline">
@@ -53,35 +60,40 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
-            {items.length === 0 && <div className="p-4 text-xs text-muted-foreground">No notifications yet.</div>}
-            {items.map((n) => (
-              <div
-                key={n.id}
-                className={`border-b border-line px-3 py-3 text-sm ${!n.read_at ? "bg-paper-2" : ""} ${notificationStyleClass(n.style_idx)}`}
-              >
-                <div className="font-medium">{n.title}</div>
-                {n.body && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>}
-                <div className="mt-2 flex gap-2">
-                  {n.link && (
-                    <Link
-                      to={n.link as "/"}
-                      onClick={() => {
-                        markRead(n.id);
-                        setOpen(false);
-                      }}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      View
-                    </Link>
-                  )}
-                  {!n.read_at && (
-                    <button type="button" onClick={() => markRead(n.id)} className="text-xs text-muted-foreground hover:underline">
-                      Dismiss
-                    </button>
-                  )}
+            <div className="overflow-y-auto flex-1">
+              {items.length === 0 && <div className="p-4 text-xs text-muted-foreground">No notifications yet.</div>}
+              {items.map((n) => (
+                <div
+                  key={n.id}
+                  className={`border-b border-line px-3 py-3 text-sm ${!n.read_at ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium leading-snug">{n.title}</div>
+                    <span className="text-[9px] mono-label shrink-0 text-muted-foreground">{TYPE_LABELS[n.type] ?? n.type}</span>
+                  </div>
+                  {n.body && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>}
+                  <div className="mt-2 flex gap-2">
+                    {n.link && (
+                      <Link
+                        to={n.link as "/"}
+                        onClick={() => {
+                          markRead(n.id);
+                          setOpen(false);
+                        }}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        View
+                      </Link>
+                    )}
+                    {!n.read_at && (
+                      <button type="button" onClick={() => markRead(n.id)} className="text-xs text-muted-foreground hover:underline">
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </>
       )}

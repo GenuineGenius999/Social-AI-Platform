@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, MessageCircle, Star } from "lucide-react";
+import { Download, MessageCircle, Star, Trash2 } from "lucide-react";
 import { downloadUrl } from "@/lib/download-client";
+import { PostMedia } from "@/components/PostMedia";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export type FeedPost = {
   id: string;
@@ -14,11 +16,13 @@ export type FeedPost = {
   caption: string | null;
   created_at: string;
   source?: string;
+  images?: string[];
 };
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
 export const POST_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏", "🎉"] as const;
+const PAGE_SIZE = 6;
 
 export function useFeedQuery() {
   return useQuery({
@@ -26,15 +30,35 @@ export function useFeedQuery() {
     queryFn: async () => {
       const { data: p } = await supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(50);
       const userIds = [...new Set((p ?? []).map((x) => x.user_id))];
-      const { data: pr } = userIds.length
-        ? await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", userIds)
-        : { data: [] };
-      const byId = new Map<string, Profile>((pr ?? []).map((u) => [u.id, u as Profile]));
-
       const postIds = (p ?? []).map((x) => x.id);
-      const { data: reviewStats } = postIds.length
-        ? await supabase.from("post_reviews").select("post_id,rating").in("post_id", postIds)
-        : { data: [] };
+
+      const [{ data: pr }, { data: imgs }, { data: reviewStats }, { data: allReactions }, { data: commentCounts }] =
+        await Promise.all([
+          userIds.length
+            ? supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", userIds)
+            : Promise.resolve({ data: [] }),
+          postIds.length
+            ? supabase.from("post_images").select("post_id,image_url,sort_order").in("post_id", postIds).order("sort_order")
+            : Promise.resolve({ data: [] }),
+          postIds.length
+            ? supabase.from("post_reviews").select("post_id,rating").in("post_id", postIds)
+            : Promise.resolve({ data: [] }),
+          postIds.length
+            ? supabase.from("post_reactions").select("post_id,emoji,user_id").in("post_id", postIds)
+            : Promise.resolve({ data: [] }),
+          postIds.length
+            ? supabase.from("post_comments").select("post_id").in("post_id", postIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+      const byId = new Map<string, Profile>((pr ?? []).map((u) => [u.id, u as Profile]));
+      const imagesByPost = new Map<string, string[]>();
+      for (const img of imgs ?? []) {
+        const list = imagesByPost.get(img.post_id) ?? [];
+        list.push(img.image_url);
+        imagesByPost.set(img.post_id, list);
+      }
+
       const ratingsByPost = new Map<string, { sum: number; count: number }>();
       for (const r of reviewStats ?? []) {
         const cur = ratingsByPost.get(r.post_id) ?? { sum: 0, count: 0 };
@@ -43,22 +67,60 @@ export function useFeedQuery() {
         ratingsByPost.set(r.post_id, cur);
       }
 
+      const reactionsByPost = new Map<string, { emoji: string; user_id: string }[]>();
+      for (const r of allReactions ?? []) {
+        const list = reactionsByPost.get(r.post_id) ?? [];
+        list.push({ emoji: r.emoji, user_id: r.user_id });
+        reactionsByPost.set(r.post_id, list);
+      }
+
+      const commentsByPost = new Map<string, number>();
+      for (const c of commentCounts ?? []) {
+        commentsByPost.set(c.post_id, (commentsByPost.get(c.post_id) ?? 0) + 1);
+      }
+
       return (p ?? []).map((x) => {
         const stats = ratingsByPost.get(x.id);
+        const extra = imagesByPost.get(x.id) ?? [];
+        const allImages = extra.length > 0 ? extra : [x.image_url];
         return {
           ...(x as FeedPost),
+          images: allImages,
           author: byId.get(x.user_id),
           avgRating: stats ? stats.sum / stats.count : null,
           reviewCount: stats?.count ?? 0,
+          reactions: reactionsByPost.get(x.id) ?? [],
+          commentCount: commentsByPost.get(x.id) ?? 0,
         };
       });
     },
   });
 }
 
-export function FeedGrid({ showHeader = true }: { showHeader?: boolean }) {
+export function FeedGrid({
+  showHeader = true,
+  limit,
+  showMoreButton = false,
+}: {
+  showHeader?: boolean;
+  limit?: number;
+  showMoreButton?: boolean;
+}) {
   const qc = useQueryClient();
   const posts = useFeedQuery();
+  const [visibleCount, setVisibleCount] = useState(limit ?? PAGE_SIZE);
+  const [me, setMe] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      setMe(data.user?.id ?? null);
+      if (data.user) {
+        const { data: prof } = await supabase.from("profiles").select("is_admin").eq("id", data.user.id).single();
+        setIsAdmin(!!(prof as { is_admin?: boolean } | null)?.is_admin);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const ch = supabase
@@ -81,6 +143,10 @@ export function FeedGrid({ showHeader = true }: { showHeader?: boolean }) {
     };
   }, [qc]);
 
+  const all = posts.data ?? [];
+  const shown = showMoreButton ? all.slice(0, visibleCount) : limit ? all.slice(0, limit) : all;
+  const hasMore = showMoreButton && visibleCount < all.length;
+
   return (
     <div className={showHeader ? "p-4 lg:p-8" : ""}>
       {showHeader && (
@@ -93,11 +159,26 @@ export function FeedGrid({ showHeader = true }: { showHeader?: boolean }) {
         </>
       )}
       <div className={`${showHeader ? "mt-8" : ""} max-w-2xl mx-auto flex flex-col gap-6`}>
-        {(posts.data ?? []).map((p) => (
-          <PostCard key={p.id} post={p} />
+        {shown.map((p) => (
+          <PostCard
+            key={p.id}
+            post={p}
+            me={me}
+            isAdmin={isAdmin}
+            onDeleted={() => qc.invalidateQueries({ queryKey: ["feed"] })}
+          />
         ))}
-        {posts.data?.length === 0 && (
+        {all.length === 0 && !posts.isLoading && (
           <div className="mono-label text-center py-12">No posts yet. Be the first — generate in Studio or upload an image.</div>
+        )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            className="ink-button w-full py-3 text-sm"
+          >
+            Show more ({all.length - visibleCount} remaining)
+          </button>
         )}
       </div>
     </div>
@@ -116,36 +197,39 @@ function timeAgo(iso: string) {
 
 function PostCard({
   post,
+  me,
+  isAdmin,
+  onDeleted,
 }: {
-  post: FeedPost & { author?: Profile; avgRating: number | null; reviewCount: number };
+  post: FeedPost & {
+    author?: Profile;
+    avgRating: number | null;
+    reviewCount: number;
+    reactions: { emoji: string; user_id: string }[];
+    commentCount: number;
+  };
+  me: string | null;
+  isAdmin: boolean;
+  onDeleted: () => void;
 }) {
-  const [reactions, setReactions] = useState<{ emoji: string; user_id: string }[]>([]);
-  const [commentCount, setCommentCount] = useState(0);
+  const [reactions, setReactions] = useState(post.reactions);
+  const [commentCount, setCommentCount] = useState(post.commentCount);
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<{ id: string; content: string; user_id: string; created_at: string; username?: string }[]>([]);
   const [showComments, setShowComments] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [me, setMe] = useState<string | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      setLoggedIn(!!u.user);
-      setMe(u.user?.id ?? null);
-      const [{ data: rx }, { count: cc }] = await Promise.all([
-        supabase.from("post_reactions").select("emoji,user_id").eq("post_id", post.id),
-        supabase.from("post_comments").select("*", { count: "exact", head: true }).eq("post_id", post.id),
-      ]);
-      setReactions((rx ?? []) as { emoji: string; user_id: string }[]);
-      setCommentCount(cc ?? 0);
-    })();
-  }, [post.id]);
+  const canDelete = me && (post.user_id === me || isAdmin);
 
-  const grouped = POST_REACTION_EMOJIS.map((emoji) => {
-    const rs = reactions.filter((r) => r.emoji === emoji);
-    return { emoji, count: rs.length, mine: me ? rs.some((r) => r.user_id === me) : false };
-  }).filter((g) => g.count > 0);
+  const grouped = useMemo(
+    () =>
+      POST_REACTION_EMOJIS.map((emoji) => {
+        const rs = reactions.filter((r) => r.emoji === emoji);
+        return { emoji, count: rs.length, mine: me ? rs.some((r) => r.user_id === me) : false };
+      }).filter((g) => g.count > 0),
+    [reactions, me],
+  );
 
   async function toggleReaction(emoji: string) {
     if (!me) {
@@ -190,19 +274,27 @@ function PostCard({
     }
   }
 
+  async function deletePost() {
+    if (!canDelete || deleting) return;
+    if (!confirm(isAdmin && post.user_id !== me ? "Delete this post as admin?" : "Delete your post?")) return;
+    setDeleting(true);
+    const { error } = await supabase.from("posts").delete().eq("id", post.id);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Post deleted");
+      onDeleted();
+    }
+    setDeleting(false);
+  }
+
   const totalReactions = reactions.length;
+  const images = post.images ?? [post.image_url];
 
   return (
     <article className="paper-card overflow-hidden">
       <div className="flex items-start gap-3 p-4 border-b border-line">
         <Link to="/post/$postId" params={{ postId: post.id }}>
-          {post.author?.avatar_url ? (
-            <img src={post.author.avatar_url} alt="" className="size-12 rounded-full border border-line object-cover" />
-          ) : (
-            <span className="size-12 rounded-full bg-paper-2 border border-line grid place-items-center font-mono text-lg">
-              {post.author?.username?.[0] ?? "?"}
-            </span>
-          )}
+          <UserAvatar avatarUrl={post.author?.avatar_url} username={post.author?.username} size="lg" />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -211,15 +303,23 @@ function PostCard({
             </Link>
             <span className="mono-label">@{post.author?.username ?? "anon"}</span>
             {post.source === "upload" && <span className="text-[10px] bg-paper-2 px-1.5 py-0.5 rounded mono-label">UPLOAD</span>}
+            {images.length > 1 && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded mono-label">CAROUSEL</span>}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">{timeAgo(post.created_at)}</div>
         </div>
-        {post.avgRating !== null && (
-          <div className="flex items-center gap-1 text-xs shrink-0">
-            <Star className="size-3.5 fill-primary text-primary" />
-            {post.avgRating.toFixed(1)}
-          </div>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {post.avgRating !== null && (
+            <div className="flex items-center gap-1 text-xs">
+              <Star className="size-3.5 fill-primary text-primary" />
+              {post.avgRating.toFixed(1)}
+            </div>
+          )}
+          {canDelete && (
+            <button type="button" onClick={deletePost} disabled={deleting} className="text-muted-foreground hover:text-destructive p-1" title="Delete post">
+              <Trash2 className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {(post.caption || post.prompt) && (
@@ -230,7 +330,7 @@ function PostCard({
       )}
 
       <Link to="/post/$postId" params={{ postId: post.id }} className="block bg-paper-2">
-        <img src={post.image_url} alt={post.prompt ?? ""} className="w-full max-h-[520px] object-contain" loading="lazy" />
+        <PostMedia images={images} alt={post.prompt ?? ""} />
       </Link>
 
       <div className="px-4 py-2 border-t border-line">
@@ -255,7 +355,7 @@ function PostCard({
           <div className="relative">
             <button
               type="button"
-              onClick={() => (loggedIn ? setShowReactionPicker((s) => !s) : toast.error("Sign in to react."))}
+              onClick={() => (me ? setShowReactionPicker((s) => !s) : toast.error("Sign in to react."))}
               className="mono-label flex items-center gap-1 hover:text-primary"
             >
               React {totalReactions > 0 && `· ${totalReactions}`}
@@ -275,7 +375,7 @@ function PostCard({
           </button>
           <button
             type="button"
-            onClick={() => downloadUrl(post.image_url, `kinetik-${post.id.slice(0, 8)}.png`)}
+            onClick={() => downloadUrl(images[0]!, `kinetik-${post.id.slice(0, 8)}.png`)}
             className="mono-label flex items-center gap-1 hover:text-primary"
           >
             <Download className="size-3.5" />
@@ -295,7 +395,7 @@ function PostCard({
             </div>
           ))}
           {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
-          {loggedIn ? (
+          {me ? (
             <div className="flex gap-2 pt-1">
               <input
                 value={comment}
