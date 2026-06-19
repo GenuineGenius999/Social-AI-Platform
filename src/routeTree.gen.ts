@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as PostPostIdRouteImport } from './routes/post.$postId'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
@@ -53,6 +54,11 @@ const PostPostIdRoute = PostPostIdRouteImport.update({
   id: '/post/$postId',
   path: '/post/$postId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
   id: '/studio',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof AuthenticatedMessagesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/post/$postId': typeof PostPostIdRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AuthenticatedMessagesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/post/$postId': typeof PostPostIdRoute
   '/u/$username': typeof UUsernameRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/post/$postId': typeof PostPostIdRoute
   '/u/$username': typeof UUsernameRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -162,6 +171,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/settings'
     | '/studio'
+    | '/users'
     | '/post/$postId'
     | '/u/$username'
     | '/admin/settings'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/settings'
     | '/studio'
+    | '/users'
     | '/post/$postId'
     | '/u/$username'
     | '/admin/settings'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/_authenticated/messages'
     | '/_authenticated/settings'
     | '/_authenticated/studio'
+    | '/_authenticated/users'
     | '/post/$postId'
     | '/u/$username'
     | '/_authenticated/admin/settings'
@@ -253,6 +265,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/post/$postId'
       preLoaderRoute: typeof PostPostIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/studio': {
       id: '/_authenticated/studio'
@@ -345,6 +364,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -354,6 +374,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

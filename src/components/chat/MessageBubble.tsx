@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MoreHorizontal, Trash2, Ban, EyeOff } from "lucide-react";
 import type { MessageChannel, Profile, Reaction } from "@/lib/chat.types";
 import { REACTION_EMOJIS } from "@/lib/chat.types";
+import { UserAvatar } from "@/components/UserAvatar";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 type Props = {
   id: string;
@@ -33,6 +35,14 @@ export function MessageBubble({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const reactRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside([menuRef, reactRef, btnRef], () => {
+    setMenuOpen(false);
+    setShowReactions(false);
+  }, menuOpen || showReactions);
 
   const grouped = REACTION_EMOJIS.map((emoji) => {
     const rs = reactions.filter((r) => r.emoji === emoji);
@@ -41,16 +51,10 @@ export function MessageBubble({
 
   return (
     <div className={`group relative flex gap-3 ${isOwn ? "flex-row-reverse" : ""}`}>
-      {author?.avatar_url ? (
-        <img src={author.avatar_url} alt="" className="size-8 shrink-0 rounded-full object-cover border border-line" />
-      ) : (
-        <div className="size-8 shrink-0 rounded-full bg-paper-2 border border-line grid place-items-center text-xs font-mono uppercase">
-          {(author?.username ?? "?")[0]}
-        </div>
-      )}
+      <UserAvatar avatarUrl={author?.avatar_url} username={author?.username} size="md" />
       <div className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"} flex flex-col`}>
-        {!isOwn && author && (
-          <span className="mono-label mb-1">@{author.username}</span>
+        {author && (
+          <span className="mono-label mb-1">{isOwn ? "You" : `@${author.username}`}</span>
         )}
         <div
           className={`relative px-4 py-2.5 text-sm leading-relaxed ${
@@ -64,11 +68,11 @@ export function MessageBubble({
               <img src={imageUrl} alt="" className="max-w-full max-h-64 rounded-lg border border-line/50" />
             </a>
           )}
-          {content && <p className="whitespace-pre-wrap">{content}</p>}
-          <div className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          {content.trim() && content.trim() !== " " && <p className="whitespace-pre-wrap">{content}</p>}
+          <div ref={btnRef} className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
             <button
               type="button"
-              onClick={() => setShowReactions((s) => !s)}
+              onClick={() => { setShowReactions((s) => !s); setMenuOpen(false); }}
               className="bg-card border border-line rounded-full px-2 py-0.5 text-xs shadow-sm hover:border-primary"
               aria-label="React"
             >
@@ -76,7 +80,7 @@ export function MessageBubble({
             </button>
             <button
               type="button"
-              onClick={() => setMenuOpen((s) => !s)}
+              onClick={() => { setMenuOpen((s) => !s); setShowReactions(false); }}
               className="bg-card border border-line rounded-full p-1 shadow-sm hover:border-primary"
               aria-label="Options"
             >
@@ -86,7 +90,7 @@ export function MessageBubble({
         </div>
 
         {showReactions && (
-          <div className="mt-2 flex gap-1 rounded-full border border-line bg-card px-2 py-1 shadow-sm">
+          <div ref={reactRef} className="mt-2 flex gap-1 rounded-full border border-line bg-card px-2 py-1 shadow-sm">
             {REACTION_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
@@ -118,7 +122,7 @@ export function MessageBubble({
         )}
 
         {menuOpen && (
-          <div className="mt-1 z-10 rounded-md border border-line bg-card shadow-lg py-1 min-w-[140px]">
+          <div ref={menuRef} className="mt-1 z-10 rounded-md border border-line bg-card shadow-lg py-1 min-w-[140px]">
             {isOwn && onDelete && (
               <button type="button" onClick={() => { onDelete(); setMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-paper-2">
                 <Trash2 className="size-3.5" /> Delete
