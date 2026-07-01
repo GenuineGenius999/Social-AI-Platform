@@ -129,7 +129,8 @@ export const joinGoGame = createServerFn({ method: "POST" })
       throw new Error("You cannot join your own game as the opponent");
     }
 
-    const { data: updated, error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: updated, error } = await supabaseAdmin
       .from("go_games")
       .update({
         white_player_id: context.userId,
@@ -143,7 +144,9 @@ export const joinGoGame = createServerFn({ method: "POST" })
       .select()
       .single();
 
-    if (error || !updated) throw new Error(error?.message ?? "Could not join game");
+    if (error || !updated) {
+      throw new Error(error?.message?.includes("single JSON") ? "Could not join game — please try again" : (error?.message ?? "Could not join game"));
+    }
     return updated as GoGameRow;
   });
 

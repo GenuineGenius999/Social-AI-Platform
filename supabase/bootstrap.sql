@@ -670,6 +670,17 @@ CREATE POLICY "go_games_update_players" ON public.go_games FOR UPDATE TO authent
   USING (auth.uid() IN (creator_id, black_player_id, white_player_id))
   WITH CHECK (auth.uid() IN (creator_id, black_player_id, white_player_id));
 
+CREATE POLICY "go_games_join" ON public.go_games FOR UPDATE TO authenticated
+  USING (
+    status = 'waiting'
+    AND white_player_id IS NULL
+    AND auth.uid() NOT IN (creator_id, black_player_id)
+  )
+  WITH CHECK (
+    auth.uid() = white_player_id
+    AND status = 'active'
+  );
+
 CREATE POLICY "go_games_delete_creator" ON public.go_games FOR DELETE TO authenticated
   USING (auth.uid() = creator_id);
 

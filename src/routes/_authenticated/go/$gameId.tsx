@@ -58,18 +58,16 @@ function GoGamePage() {
     loadAll();
     const chGame = supabase
       .channel(`go-game-${gameId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "go_games", filter: `id=eq.${gameId}` }, () => loadGame())
+      .on("postgres_changes", { event: "*", schema: "public", table: "go_games", filter: `id=eq.${gameId}` }, () => {
+        void loadGame();
+      })
       .subscribe();
 
     const chMoves = supabase
       .channel(`go-moves-${gameId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "go_moves", filter: `game_id=eq.${gameId}` }, (payload) => {
-        setMoves((prev) => {
-          const row = payload.new as GoMoveRow;
-          if (prev.some((m) => m.id === row.id)) return prev;
-          return [...prev, row].sort((a, b) => a.move_number - b.move_number);
-        });
-        loadGame();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "go_moves", filter: `game_id=eq.${gameId}` }, () => {
+        void loadMoves();
+        void loadGame();
       })
       .subscribe();
 
@@ -143,8 +141,8 @@ function GoGamePage() {
     try {
       const g = await join({ data: { gameId } });
       setGame(g);
-      toast.success("Joined as White");
-      loadAll();
+      await loadProfiles(g);
+      toast.success("Joined as White — Black moves first");
     } catch (e) {
       toast.error(friendlyDbError(e instanceof Error ? e.message : "Could not join"));
     } finally {
@@ -153,10 +151,29 @@ function GoGamePage() {
   }
 
   async function handlePlay(x: number, y: number) {
+    if (!game || !myColor || !me || game.current_turn !== myColor) return;
+
+    const optimistic: GoMoveRow = {
+      id: `opt-${x}-${y}-${Date.now()}`,
+      game_id: gameId,
+      move_number: moves.length + 1,
+      player_id: me,
+      color: myColor,
+      x,
+      y,
+      is_pass: false,
+      captured_count: 0,
+      created_at: new Date().toISOString(),
+    };
+    setMoves((prev) => [...prev, optimistic]);
+
     setActing(true);
     try {
-      await play({ data: { gameId, x, y } });
+      const updated = await play({ data: { gameId, x, y } });
+      setGame(updated);
+      await loadMoves();
     } catch (e) {
+      setMoves((prev) => prev.filter((m) => m.id !== optimistic.id));
       toast.error(friendlyDbError(e instanceof Error ? e.message : "Illegal move"));
     } finally {
       setActing(false);
@@ -166,7 +183,9 @@ function GoGamePage() {
   async function handlePass() {
     setActing(true);
     try {
-      await pass({ data: { gameId } });
+      const updated = await pass({ data: { gameId } });
+      setGame(updated);
+      await loadMoves();
       toast.info("Passed");
     } catch (e) {
       toast.error(friendlyDbError(e instanceof Error ? e.message : "Failed"));
@@ -179,7 +198,8 @@ function GoGamePage() {
     if (!confirm("Resign this game?")) return;
     setActing(true);
     try {
-      await resign({ data: { gameId } });
+      const updated = await resign({ data: { gameId } });
+      setGame(updated);
       toast.info("You resigned");
     } catch (e) {
       toast.error(friendlyDbError(e instanceof Error ? e.message : "Failed"));
@@ -307,7 +327,7 @@ function GoGamePage() {
         </div>
 
         <div className="grid lg:grid-cols-[1fr_280px] gap-6">
-          <div className="paper-card p-4 lg:p-6 flex justify-center">
+          <div className="paper-card p-4 lg:p-6 flex justify-center relative">
             {boardState && (
               <GoBoard
                 board={boardState.board}
@@ -319,6 +339,14 @@ function GoGamePage() {
                 interactive={game.status === "active" && !acting}
                 onPlay={handlePlay}
               />
+            )}
+            {game.status === "waiting" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-paper/80 pointer-events-none">
+                <div className="paper-card px-6 py-4 text-center">
+                  <div className="mono-label mb-1">WAITING</div>
+                  <p className="text-sm">{isCreator ? "Share the link — opponent joins as White" : "Join as White to start"}</p>
+                </div>
+              </div>
             )}
           </div>
 
@@ -380,10 +408,17 @@ function GoGamePage() {
               </div>
             )}
 
+            {game.status === "waiting" && !isCreator && !myColor && (
+              <div className="paper-card p-4">
+                <div className="mono-label mb-2">JOIN THIS GAME</div>
+                <p className="text-xs text-muted-foreground mb-3">Click &quot;Join as White&quot; above to start playing.</p>
+              </div>
+            )}
+
             {game.status === "waiting" && isCreator && (
               <div className="paper-card p-4">
                 <div className="mono-label mb-2">WAITING FOR OPPONENT</div>
-                <p className="text-xs text-muted-foreground mb-3">Share the link above. You play as Black.</p>
+                <p className="text-xs text-muted-foreground mb-3">Share the link above. You play as Black once they join.</p>
                 <button onClick={() => setShowSettings(!showSettings)} className="ink-button w-full py-2 text-xs flex items-center justify-center gap-1 mb-2">
                   <Settings className="size-3" /> Settings
                 </button>
