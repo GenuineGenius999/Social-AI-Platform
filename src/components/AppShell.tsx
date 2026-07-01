@@ -13,8 +13,9 @@ const NAV = [
   { to: "/studio", label: "Studio", code: "02" },
   { to: "/chat", label: "AI Chat", code: "03" },
   { to: "/messages", label: "Channels", code: "04" },
-  { to: "/users", label: "Users", code: "05" },
-  { to: "/settings", label: "Settings", code: "06" },
+  { to: "/go", label: "Go", code: "05" },
+  { to: "/users", label: "Users", code: "06" },
+  { to: "/settings", label: "Settings", code: "07" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {

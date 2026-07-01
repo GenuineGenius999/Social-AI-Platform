@@ -22,7 +22,9 @@ import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
+import { Route as AuthenticatedGoIndexRouteImport } from './routes/_authenticated/go/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as AuthenticatedGoGameIdRouteImport } from './routes/_authenticated/go/$gameId'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
 
@@ -90,10 +92,20 @@ const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedGoIndexRoute = AuthenticatedGoIndexRouteImport.update({
+  id: '/go/',
+  path: '/go/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
+const AuthenticatedGoGameIdRoute = AuthenticatedGoGameIdRouteImport.update({
+  id: '/go/$gameId',
+  path: '/go/$gameId',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
   id: '/users',
@@ -122,7 +134,9 @@ export interface FileRoutesByFullPath {
   '/u/$username': typeof UUsernameRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/go/$gameId': typeof AuthenticatedGoGameIdRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/go/': typeof AuthenticatedGoIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -138,7 +152,9 @@ export interface FileRoutesByTo {
   '/u/$username': typeof UUsernameRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/go/$gameId': typeof AuthenticatedGoGameIdRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/go': typeof AuthenticatedGoIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -157,7 +173,9 @@ export interface FileRoutesById {
   '/u/$username': typeof UUsernameRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/_authenticated/go/$gameId': typeof AuthenticatedGoGameIdRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/go/': typeof AuthenticatedGoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -176,7 +194,9 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/admin/settings'
     | '/admin/users'
+    | '/go/$gameId'
     | '/admin/'
+    | '/go/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -192,7 +212,9 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/admin/settings'
     | '/admin/users'
+    | '/go/$gameId'
     | '/admin'
+    | '/go'
   id:
     | '__root__'
     | '/'
@@ -210,7 +232,9 @@ export interface FileRouteTypes {
     | '/u/$username'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/users'
+    | '/_authenticated/go/$gameId'
     | '/_authenticated/admin/'
+    | '/_authenticated/go/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -315,12 +339,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/go/': {
+      id: '/_authenticated/go/'
+      path: '/go'
+      fullPath: '/go/'
+      preLoaderRoute: typeof AuthenticatedGoIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/go/$gameId': {
+      id: '/_authenticated/go/$gameId'
+      path: '/go/$gameId'
+      fullPath: '/go/$gameId'
+      preLoaderRoute: typeof AuthenticatedGoGameIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin/users': {
       id: '/_authenticated/admin/users'
@@ -365,6 +403,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
+  AuthenticatedGoGameIdRoute: typeof AuthenticatedGoGameIdRoute
+  AuthenticatedGoIndexRoute: typeof AuthenticatedGoIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -375,6 +415,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
+  AuthenticatedGoGameIdRoute: AuthenticatedGoGameIdRoute,
+  AuthenticatedGoIndexRoute: AuthenticatedGoIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
