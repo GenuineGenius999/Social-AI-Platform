@@ -281,6 +281,116 @@ export type Database = {
         }
         Relationships: []
       }
+      go_games: {
+        Row: {
+          id: string
+          creator_id: string
+          black_player_id: string
+          white_player_id: string | null
+          board_size: number
+          status: string
+          current_turn: string | null
+          winner: string | null
+          komi: number
+          consecutive_passes: number
+          ko_x: number | null
+          ko_y: number | null
+          last_move_x: number | null
+          last_move_y: number | null
+          black_captures: number
+          white_captures: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          creator_id: string
+          black_player_id: string
+          white_player_id?: string | null
+          board_size?: number
+          status?: string
+          current_turn?: string | null
+          winner?: string | null
+          komi?: number
+          consecutive_passes?: number
+          ko_x?: number | null
+          ko_y?: number | null
+          last_move_x?: number | null
+          last_move_y?: number | null
+          black_captures?: number
+          white_captures?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          creator_id?: string
+          black_player_id?: string
+          white_player_id?: string | null
+          board_size?: number
+          status?: string
+          current_turn?: string | null
+          winner?: string | null
+          komi?: number
+          consecutive_passes?: number
+          ko_x?: number | null
+          ko_y?: number | null
+          last_move_x?: number | null
+          last_move_y?: number | null
+          black_captures?: number
+          white_captures?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      go_moves: {
+        Row: {
+          id: string
+          game_id: string
+          move_number: number
+          player_id: string
+          color: string
+          x: number | null
+          y: number | null
+          is_pass: boolean
+          captured_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_id: string
+          move_number: number
+          player_id: string
+          color: string
+          x?: number | null
+          y?: number | null
+          is_pass?: boolean
+          captured_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_id?: string
+          move_number?: number
+          player_id?: string
+          color?: string
+          x?: number | null
+          y?: number | null
+          is_pass?: boolean
+          captured_count?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "go_moves_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "go_games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_messages: {
         Row: {
           content: string

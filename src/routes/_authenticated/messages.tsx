@@ -97,7 +97,7 @@ function Messages() {
           .map((r) => r.chat_groups as GroupInfo | null)
           .filter(Boolean) as GroupInfo[];
         setGroups(list);
-      });
+      }); 
     supabase
       .from("chat_groups")
       .select("id,name,description,visibility,cover_url,avatar_url,bio")
